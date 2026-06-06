@@ -1,0 +1,30 @@
+============================================================
+ STOREFRONT PRO - API KEYS SETUP GUIDE
+============================================================
+GitHub blocks committing live Google/Gemini API keys (secret scanning),
+so the real keys are NOT stored in this repo. They live only in the
+local `.dev.vars` file and must be added to Cloudflare as secrets for
+production:
+
+  npx wrangler pages secret put PAYU_KEY
+  npx wrangler pages secret put PAYU_SALT
+  npx wrangler pages secret put GROQ_API_KEY
+  npx wrangler pages secret put GEMINI_API_KEY
+
+Environment variables used by the app (src/types.ts -> Bindings):
+  PAYU_KEY        -> PayU merchant key (test)
+  PAYU_SALT       -> PayU salt (test)
+  GROQ_API_KEY    -> Groq Cloud (AI live chat)  [gsk_...]
+  GEMINI_API_KEY  -> Google Gemini (reserved)   [AQ....]
+
+--- Super Admin PIN (changeable in /super) ---
+SUPER_ADMIN_PIN = 2005####   (you can change it from the /super panel)
+
+--- Demo Owner Login ---
+email: demo@storebuilder.app
+PIN:   1234
+============================================================
+NOTE: You provided the real keys directly to the assistant; they are
+configured locally in `.dev.vars`. Keep that file private. To deploy,
+use the wrangler secret commands above with your real key values.
+============================================================
