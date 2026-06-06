@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from './types'
 import { PLANS, THEMES, CATEGORIES } from './types'
 import { buildPayuRequest, verifyPayuResponse } from './payu'
+import { startPayment, verifyRazorpay } from './gateways'
 import { groqChat, buildStoreSystemPrompt } from './ai'
 
 const api = new Hono<{ Bindings: Bindings }>()
@@ -142,6 +143,7 @@ api.put('/owner/store', async (c) => {
   const b = await c.req.json()
   const fields = ['name','category','theme','tagline','about','logo_url','cover_url','primary_color','accent_color',
     'currency','phone','whatsapp','email','address','pay_upi','pay_qr_url','pay_bank','pay_link','pay_gateway_enabled',
+    'pay_provider','pay_key_id','pay_key_secret','pay_extra',
     'white_label','custom_domain','seo_title','seo_description','seo_keywords','is_published']
   const sets: string[] = []
   const vals: any[] = []
@@ -223,6 +225,34 @@ api.delete('/owner/coupons/:id', async (c) => {
   return json(c, { ok: true })
 })
 
+// ----- Media library (uploads) -----
+const MAX_MEDIA_BYTES = 800 * 1024 // ~800KB data URL cap (D1 friendly)
+api.get('/owner/media', async (c) => {
+  const owner = await authOwner(c); if (!owner) return json(c, { ok: false }, 401)
+  const store = await getOwnerStore(c.env.DB, owner.id)
+  const rows = await c.env.DB.prepare('SELECT id,name,mime,kind,data,size,created_at FROM media WHERE store_id=? ORDER BY id DESC LIMIT 200').bind(store.id).all()
+  return json(c, { ok: true, media: rows.results })
+})
+api.post('/owner/media', async (c) => {
+  const owner = await authOwner(c); if (!owner) return json(c, { ok: false }, 401)
+  const store = await getOwnerStore(c.env.DB, owner.id)
+  const b = await c.req.json()
+  const data: string = b.data || ''
+  if (!data.startsWith('data:')) return json(c, { ok: false, error: 'Invalid file' }, 400)
+  if (data.length > MAX_MEDIA_BYTES * 1.4) return json(c, { ok: false, error: 'File too large (max ~800KB). Please compress or use a URL.' }, 400)
+  const mime = (data.split(';')[0] || '').replace('data:', '') || 'application/octet-stream'
+  const kind = mime.startsWith('video') ? 'video' : 'image'
+  const r = await c.env.DB.prepare('INSERT INTO media (store_id,name,mime,kind,data,size) VALUES (?,?,?,?,?,?)')
+    .bind(store.id, (b.name || 'upload').slice(0, 120), mime, kind, data, data.length).run()
+  return json(c, { ok: true, id: r.meta.last_row_id, kind, mime, data })
+})
+api.delete('/owner/media/:id', async (c) => {
+  const owner = await authOwner(c); if (!owner) return json(c, { ok: false }, 401)
+  const store = await getOwnerStore(c.env.DB, owner.id)
+  await c.env.DB.prepare('DELETE FROM media WHERE id=? AND store_id=?').bind(c.req.param('id'), store.id).run()
+  return json(c, { ok: true })
+})
+
 // ----- Order / enquiry status update -----
 api.put('/owner/orders/:id', async (c) => {
   const owner = await authOwner(c); if (!owner) return json(c, { ok: false }, 401)
@@ -250,8 +280,11 @@ api.get('/store/:slug', async (c) => {
   const products = await c.env.DB.prepare('SELECT * FROM products WHERE store_id=? AND in_stock=1 ORDER BY sort_order,id').bind(store.id).all()
   const categories = await c.env.DB.prepare('SELECT * FROM categories WHERE store_id=? ORDER BY sort_order').bind(store.id).all()
   const coupons = await c.env.DB.prepare('SELECT code,description,discount_type,discount_value FROM coupons WHERE store_id=? AND active=1').bind(store.id).all()
-  // hide sensitive owner data
-  return json(c, { ok: true, store, products: products.results, categories: categories.results, coupons: coupons.results })
+  // Strip secrets before sending to the public storefront.
+  const { pay_key_secret, pay_extra, ...safeStore } = store
+  safeStore.pay_provider = store.pay_provider || ''
+  safeStore.pay_key_id = store.pay_key_id ? 'set' : ''
+  return json(c, { ok: true, store: safeStore, products: products.results, categories: categories.results, coupons: coupons.results })
 })
 
 api.post('/store/:slug/order', async (c) => {
@@ -265,6 +298,80 @@ api.post('/store/:slug/order', async (c) => {
     VALUES (?,?,?,?,?,?,?,?)`)
     .bind(store.id, b.customer_name, b.customer_phone || '', b.customer_email || '', b.address || '', JSON.stringify(b.items), total, b.note || '').run()
   return json(c, { ok: true, orderId: r.meta.last_row_id, total })
+})
+
+// Start an online payment for a placed order using the store's own gateway.
+api.post('/store/:slug/pay', async (c) => {
+  const slug = c.req.param('slug')
+  const store = await c.env.DB.prepare('SELECT * FROM stores WHERE slug=?').bind(slug).first<any>()
+  if (!store) return json(c, { ok: false, error: 'Store not found' }, 404)
+  if (!store.pay_provider || !store.pay_key_id || !store.pay_key_secret) {
+    return json(c, { ok: false, error: 'Online payment not set up for this store' }, 400)
+  }
+  const { orderId } = await c.req.json()
+  const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id=? AND store_id=?').bind(orderId, store.id).first<any>()
+  if (!order) return json(c, { ok: false, error: 'Order not found' }, 404)
+  try {
+    const result = await startPayment({
+      provider: store.pay_provider,
+      keyId: store.pay_key_id,
+      keySecret: store.pay_key_secret,
+      extra: store.pay_extra || '',
+      amount: order.total,
+      orderId: order.id,
+      storeName: store.name,
+      customerName: order.customer_name,
+      customerEmail: order.customer_email,
+      customerPhone: order.customer_phone,
+      origin: new URL(c.req.url).origin,
+      slug
+    })
+    return json(c, result)
+  } catch (e: any) {
+    return json(c, { ok: false, error: e.message || 'Payment error' }, 500)
+  }
+})
+
+// Verify Razorpay payment (called by the checkout popup handler).
+api.post('/store/:slug/pay/verify', async (c) => {
+  const slug = c.req.param('slug')
+  const store = await c.env.DB.prepare('SELECT * FROM stores WHERE slug=?').bind(slug).first<any>()
+  if (!store) return json(c, { ok: false }, 404)
+  const { orderId, resp } = await c.req.json()
+  if (store.pay_provider === 'razorpay' && resp) {
+    const ok = await verifyRazorpay(store.pay_key_secret, resp.razorpay_order_id, resp.razorpay_payment_id, resp.razorpay_signature)
+    if (ok) {
+      await c.env.DB.prepare("UPDATE orders SET payment_status='paid', payment_ref=? WHERE id=? AND store_id=?")
+        .bind(resp.razorpay_payment_id, orderId, store.id).run()
+      return json(c, { ok: true })
+    }
+    return json(c, { ok: false, error: 'Signature mismatch' }, 400)
+  }
+  return json(c, { ok: false, error: 'Unsupported' }, 400)
+})
+
+// Hosted-gateway return URL (PayU/Cashfree/PhonePe). Marks paid optimistically
+// for redirect gateways and shows a friendly confirmation page.
+api.all('/store/:slug/pay/return', async (c) => {
+  const slug = c.req.param('slug')
+  const orderId = c.req.query('o')
+  const failed = c.req.query('f')
+  const store = await c.env.DB.prepare('SELECT id,name,slug FROM stores WHERE slug=?').bind(slug).first<any>()
+  let status = 'failed'
+  if (store && orderId && !failed) {
+    await c.env.DB.prepare("UPDATE orders SET payment_status='paid' WHERE id=? AND store_id=?").bind(orderId, store.id).run()
+    status = 'success'
+  }
+  const ok = status === 'success'
+  return c.html(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment ${ok ? 'Successful' : 'Failed'}</title><script src="https://cdn.tailwindcss.com"></script></head>
+  <body class="bg-slate-50 min-h-screen flex items-center justify-center p-4 font-sans">
+    <div class="bg-white rounded-2xl shadow-xl p-8 max-w-sm text-center">
+      <div class="text-5xl mb-3">${ok ? '✅' : '❌'}</div>
+      <h1 class="text-xl font-bold ${ok ? 'text-green-600' : 'text-red-600'}">Payment ${ok ? 'Successful' : 'Failed'}</h1>
+      <p class="text-slate-500 mt-2 text-sm">${ok ? 'Thank you! Your order has been confirmed.' : 'Your payment could not be completed.'}</p>
+      <a href="/s/${slug}" class="inline-block mt-5 bg-indigo-600 text-white font-bold px-5 py-2.5 rounded-lg">Back to store</a>
+    </div>
+  </body></html>`)
 })
 
 api.post('/store/:slug/enquiry', async (c) => {
@@ -302,14 +409,22 @@ api.post('/store/:slug/chat', async (c) => {
 // PAYMENTS (SaaS subscription via PayU)  &  store-order payment
 // ============================================================
 api.post('/pay/subscribe', async (c) => {
-  const key = c.env.PAYU_KEY, salt = c.env.PAYU_SALT
-  if (!key || !salt) return json(c, { ok: false, error: 'Payment not configured' }, 503)
   const b = await c.req.json()
   const plan = PLANS.find((p) => p.key === b.plan)
   if (!plan || plan.price <= 0) return json(c, { ok: false, error: 'Invalid plan' }, 400)
   const txnid = 'SUB' + Date.now() + Math.floor(Math.random() * 1000)
   await c.env.DB.prepare('INSERT INTO subscriptions (owner_id,plan,amount,txn_id,status) VALUES (?,?,?,?,?)')
     .bind(b.ownerId || 0, plan.key, plan.price, txnid, 'pending').run()
+
+  // Preferred: hosted PayU payment link (real, working payment page).
+  const link = c.env.PAYU_PAYMENT_LINK
+  if (link) {
+    return json(c, { ok: true, mode: 'link', url: link, txnid })
+  }
+
+  // Fallback: classic PayU hosted form (requires valid live key+salt).
+  const key = c.env.PAYU_KEY, salt = c.env.PAYU_SALT
+  if (!key || !salt) return json(c, { ok: false, error: 'Payment not configured' }, 503)
   const origin = new URL(c.req.url).origin
   const req = await buildPayuRequest({
     key, salt, txnid,
@@ -320,9 +435,9 @@ api.post('/pay/subscribe', async (c) => {
     phone: b.phone || '9999999999',
     surl: `${origin}/api/pay/callback?type=success`,
     furl: `${origin}/api/pay/callback?type=failure`,
-    test: true
+    test: false
   })
-  return json(c, { ok: true, ...req, txnid })
+  return json(c, { ok: true, mode: 'form', ...req, txnid })
 })
 
 api.post('/pay/callback', async (c) => {

@@ -1,9 +1,9 @@
-# StoreFront Pro – Multi-Tenant Online Store & Website Builder (SaaS)
+# Storenest – Multi-Tenant Online Store & Website Builder (SaaS)
 
 A complete **Shopify-style SaaS platform** that lets any business (restaurant, retail, salon, services) launch a beautiful online store / website in minutes — with online ordering, payments, AI live chat, custom branding, themes and a full self-service admin panel. Built to be **sold to many business owners** from a single deployment.
 
 ## 🎯 Project Overview
-- **Name**: StoreFront Pro
+- **Name**: Storenest
 - **Goal**: Sell one product to unlimited business owners. Each owner gets their own store, dashboard and public website. The platform owner (you) controls everything via a Super Admin panel.
 - **Business Model**: Subscriptions (7-day free trial → Starter ₹250 → Growth ₹799 → Enterprise/White-Label ₹1999), paid via PayU.
 
@@ -67,7 +67,7 @@ A complete **Shopify-style SaaS platform** that lets any business (restaurant, r
 
 **Platform owner (you):** Go to `/super` → enter PIN `2005####` → see all owners → "Unlock Free" gives any owner (or yourself) full free access. Change PIN from the same screen.
 
-> Demo login: `demo@storebuilder.app` / PIN `1234` · Demo store: `/s/demo`
+> Demo login: `demo@storenest.app` / PIN `1234` · Demo store: `/s/demo`
 
 ## 🔐 Secrets (Cloudflare)
 Set these in production via `wrangler pages secret put`:

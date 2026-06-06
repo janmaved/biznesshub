@@ -17,7 +17,7 @@ export function landingPage(): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  ${head('StoreFront Pro – Build Your Online Store & Website in Minutes', 'Create a stunning online store, menu and booking website for your business. Online ordering, payments, AI chat support, custom branding & themes. Cheaper & better than Shopify.')}
+  ${head('Storenest – Build Your Online Store & Website in Minutes', 'Create a stunning online store, menu and booking website for your business. Online ordering, payments, AI chat support, custom branding & themes. Cheaper & better than Shopify.')}
   <style>
     .gradient-hero{background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 50%,#06b6d4 100%);}
     .glass{background:rgba(255,255,255,.08);backdrop-filter:blur(10px);}
@@ -29,7 +29,7 @@ export function landingPage(): string {
   <!-- NAV -->
   <nav class="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="font-extrabold text-xl text-indigo-600"><i class="fas fa-store mr-1"></i>StoreFront Pro</a>
+      <a href="/" class="font-extrabold text-xl text-indigo-600"><i class="fas fa-store mr-1"></i>Storenest</a>
       <div class="hidden md:flex items-center gap-6 text-sm font-medium">
         <a href="#features" class="hover:text-indigo-600">Features</a>
         <a href="#themes" class="hover:text-indigo-600">Themes</a>
@@ -104,8 +104,8 @@ export function landingPage(): string {
   </section>
 
   <footer class="bg-slate-900 text-slate-400 py-10 px-4 text-center text-sm">
-    <p class="font-bold text-white text-lg mb-2"><i class="fas fa-store"></i> StoreFront Pro</p>
-    <p>Build your online store, menu & booking website. © ${new Date().getFullYear()} StoreFront Pro.</p>
+    <p class="font-bold text-white text-lg mb-2"><i class="fas fa-store"></i> Storenest</p>
+    <p>Build your online store, menu & booking website. © ${new Date().getFullYear()} Storenest.</p>
     <p class="mt-3"><a href="/owner" class="hover:text-white">Owner Login</a> · <a href="/super" class="hover:text-white">Admin</a> · <a href="/s/demo" class="hover:text-white">Demo</a></p>
   </footer>
 

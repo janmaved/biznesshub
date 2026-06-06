@@ -3,9 +3,12 @@ export type Bindings = {
   // Secrets (set via wrangler secret put or .dev.vars)
   PAYU_KEY?: string;
   PAYU_SALT?: string;
+  PAYU_PAYMENT_LINK?: string; // hosted PayU payment link (u.payu.in/...) for real subscription payments
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
 };
+
+export const BRAND = 'Storenest';
 
 export interface PlanDef {
   key: string;
