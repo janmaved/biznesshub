@@ -136,7 +136,7 @@ function renderDashboard(){
   renderNav(); switchTab(tab);
 }
 
-const NAV=[['overview','Overview','fa-gauge'],['store','Store Settings','fa-gear'],['themes','Themes','fa-palette'],['products','Products / Menu','fa-box'],['orders','Orders','fa-cart-shopping'],['enquiries','Enquiries','fa-envelope'],['coupons','Offers & Coupons','fa-tags'],['payments','Payments','fa-indian-rupee-sign'],['plan','Plan & Billing','fa-crown'],['security','Security','fa-lock']];
+const NAV=[['overview','Overview','fa-gauge'],['store','Store Settings','fa-gear'],['themes','Themes','fa-palette'],['products','Products / Menu','fa-box'],['orders','Orders','fa-cart-shopping'],['enquiries','Enquiries','fa-envelope'],['support','Support & Feedback','fa-headset'],['coupons','Offers & Coupons','fa-tags'],['checkout','Checkout Fields','fa-list-check'],['payments','Payments','fa-indian-rupee-sign'],['plan','Plan & Billing','fa-crown'],['request','Request a Feature','fa-wand-magic-sparkles'],['security','Security','fa-lock']];
 
 function renderNav(){
   $('navMenu').innerHTML = NAV.map(n=>\`
@@ -155,9 +155,12 @@ function switchTab(t){ tab=t; renderNav();
   if(t==='products'){ c.innerHTML=viewProducts(); }
   if(t==='orders') c.innerHTML=viewOrders();
   if(t==='enquiries') c.innerHTML=viewEnquiries();
+  if(t==='support'){ c.innerHTML=viewSupport(); loadTickets(); }
   if(t==='coupons') c.innerHTML=viewCoupons();
+  if(t==='checkout') c.innerHTML=viewCheckout();
   if(t==='payments') c.innerHTML=viewPayments();
   if(t==='plan') c.innerHTML=viewPlan();
+  if(t==='request') c.innerHTML=viewRequest();
   if(t==='security') c.innerHTML=viewSecurity();
 }
 
@@ -341,17 +344,105 @@ async function delCat(id){ await axios.delete('/api/owner/categories/'+id,{heade
 // ORDERS
 function viewOrders(){
   if(!STATE.orders.length) return card('<p class="text-slate-400">No orders yet.</p>');
-  return card('<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Action</th></tr></thead><tbody>'+
-    STATE.orders.map(o=>{ let items=''; try{items=JSON.parse(o.items_json).map(i=>i.name+' x'+i.qty).join(', ')}catch(e){}
-    return '<tr class="border-b"><td class="py-2"><b>'+o.customer_name+'</b><br><span class="text-xs text-slate-400">'+(o.customer_phone||'')+'</span></td><td class="text-xs">'+items+'</td><td class="font-semibold">'+STATE.store.currency+' '+o.total+'</td><td><span class="text-xs px-2 py-1 rounded '+(o.status==='completed'?'bg-green-100 text-green-700':o.status==='cancelled'?'bg-red-100 text-red-700':'bg-amber-100 text-amber-700')+'">'+o.status+'</span></td>'+
-    '<td><select onchange=\\'updOrder('+o.id+',this.value)\\' class="border rounded text-xs px-1 py-1"><option>change</option><option value="confirmed">Confirm</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select></td></tr>'; }).join('')+'</tbody></table></div>');
+  return STATE.orders.map(o=>{ let items=''; try{items=JSON.parse(o.items_json).map(i=>i.name+' x'+i.qty).join(', ')}catch(e){}
+    const payCls=o.payment_status==='paid'?'bg-green-100 text-green-700':o.payment_status==='pending_verify'?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600';
+    return card('<div class="flex flex-wrap justify-between gap-2"><div><p class="font-bold">'+(o.order_code||('#'+o.id))+' · '+o.customer_name+'</p>'+
+      '<p class="text-xs text-slate-400">'+(o.customer_phone||'')+' '+(o.customer_email||'')+'</p>'+
+      (o.address?'<p class="text-xs text-slate-500 mt-1"><i class="fas fa-location-dot"></i> '+esc(o.address)+'</p>':'')+
+      '<p class="text-sm mt-2">'+esc(items)+'</p>'+
+      (o.payment_utr?'<p class="text-xs mt-1">UTR/Txn: <b class="font-mono">'+esc(o.payment_utr)+'</b></p>':'')+'</div>'+
+      '<div class="text-right"><p class="font-bold text-lg">'+STATE.store.currency+' '+o.total+'</p>'+
+      '<span class="text-xs px-2 py-1 rounded '+(o.status==='completed'?'bg-green-100 text-green-700':o.status==='cancelled'?'bg-red-100 text-red-700':'bg-amber-100 text-amber-700')+'">'+o.status+'</span> '+
+      '<span class="text-xs px-2 py-1 rounded '+payCls+'">'+o.payment_status+'</span></div></div>'+
+      '<div class="flex flex-wrap gap-2 mt-3 items-center">'+
+      '<select onchange=\\'updOrder('+o.id+',this.value)\\' class="border rounded text-xs px-2 py-1"><option>Set status</option><option value="confirmed">Confirm</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>'+
+      '<button onclick=\\'markPaid('+o.id+')\\' class="text-xs bg-green-600 text-white px-2 py-1 rounded">Mark Paid</button>'+
+      '<input id="trk'+o.id+'" value="'+esc(o.tracking_link||'')+'" placeholder="Delivery tracking link" class="border rounded text-xs px-2 py-1 flex-1 min-w-[160px]">'+
+      '<button onclick=\\'saveTrack('+o.id+')\\' class="text-xs bg-indigo-600 text-white px-2 py-1 rounded">Save Link</button></div>','mb-3');
+  }).join('');
 }
-async function updOrder(id,status){ if(status==='change')return; await axios.put('/api/owner/orders/'+id,{status},{headers:authHeaders()}); await reload(); switchTab('orders'); }
+async function updOrder(id,status){ if(status==='Set status')return; await axios.put('/api/owner/orders/'+id,{status},{headers:authHeaders()}); await reload(); switchTab('orders'); }
+async function markPaid(id){ await axios.put('/api/owner/orders/'+id,{payment_status:'paid'},{headers:authHeaders()}); await reload(); switchTab('orders'); toast('Marked paid'); }
+async function saveTrack(id){ await axios.put('/api/owner/orders/'+id,{tracking_link:$('trk'+id).value},{headers:authHeaders()}); await reload(); switchTab('orders'); toast('Tracking link saved'); }
 
 // ENQUIRIES
 function viewEnquiries(){
   if(!STATE.enquiries.length) return card('<p class="text-slate-400">No enquiries yet.</p>');
   return STATE.enquiries.map(e=>card('<div class="flex justify-between items-start"><div><p class="font-semibold">'+(e.name||'Anonymous')+' <span class="text-xs '+(e.source==='ai_chat'?'bg-purple-100 text-purple-700':'bg-slate-100 text-slate-600')+' px-2 py-0.5 rounded ml-1">'+e.source+'</span></p><p class="text-xs text-slate-400">'+(e.phone||'')+' '+(e.email||'')+'</p><p class="mt-2 text-sm">'+e.message+'</p></div><span class="text-xs '+(e.status==='new'?'bg-indigo-100 text-indigo-700':'bg-slate-100 text-slate-500')+' px-2 py-1 rounded">'+e.status+'</span></div>','mb-3')).join('');
+}
+
+function esc(s){return String(s==null?'':s).replace(/[<>&"]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[m]))}
+
+// SUPPORT & FEEDBACK (customer tickets)
+function viewSupport(){ return '<div id="ticketList">'+card('<p class="text-slate-400">Loading conversations...</p>')+'</div>'; }
+async function loadTickets(){
+  const {data}=await axios.get('/api/owner/tickets',{headers:authHeaders()});
+  const el=$('ticketList'); if(!el)return;
+  if(!data.ok||!data.tickets.length){ el.innerHTML=card('<p class="text-slate-400">No support messages or feedback yet. Customers can send these from their account on your store.</p>'); return; }
+  el.innerHTML=data.tickets.map(t=>card(
+    '<div class="flex justify-between items-center mb-2"><div><p class="font-bold">'+esc(t.subject)+'</p><p class="text-xs text-slate-400">'+esc(t.customer_name)+' · '+esc(t.customer_email)+'</p></div><span class="text-xs px-2 py-1 rounded '+(t.status==='answered'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700')+'">'+t.status+'</span></div>'+
+    '<div class="space-y-2 mb-3">'+t.messages.map(m=>otMsg(m)).join('')+'</div>'+
+    '<div class="flex gap-2 items-center"><input id="orep'+t.id+'" placeholder="Type your reply..." class="flex-1 border rounded-lg px-3 py-2 text-sm"><input type="file" id="orepf'+t.id+'" accept="image/*,video/*" class="hidden" onchange="otAttach('+t.id+')"><button onclick="document.getElementById(\\'orepf'+t.id+'\\').click()" class="px-2 text-slate-500" title="Attach"><i class="fas fa-paperclip"></i></button><button onclick="ownerReply('+t.id+')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Send</button></div><span id="oratt'+t.id+'" class="text-xs text-slate-400"></span>','mb-3')).join('');
+}
+function otMsg(m){
+  const mine=m.sender==='owner';
+  let att=''; if(m.attach_url){ att=m.attach_kind==='video'?'<video src="'+m.attach_url+'" controls class="mt-1 rounded max-w-[200px]"></video>':'<img src="'+m.attach_url+'" class="mt-1 rounded max-w-[200px]">'; }
+  return '<div class="'+(mine?'text-right':'text-left')+'"><span class="inline-block px-3 py-2 rounded-2xl text-sm '+(mine?'bg-indigo-600 text-white':'bg-slate-100')+'" style="max-width:80%">'+(m.body?esc(m.body):'')+att+'</span><p class="text-[10px] text-slate-400">'+(mine?'You (owner)':'Customer')+'</p></div>';
+}
+let OATT={};
+function otAttach(id){ const f=$('orepf'+id).files[0]; if(!f)return; if(f.size>800*1024){ toast('Max 800KB',true); return; } const r=new FileReader(); r.onload=()=>{ OATT[id]={url:r.result,kind:f.type.startsWith('video')?'video':'image'}; $('oratt'+id).textContent='Attached: '+f.name; }; r.readAsDataURL(f); }
+async function ownerReply(id){
+  const body=$('orep'+id).value; const a=OATT[id]||{};
+  if(!body&&!a.url){ toast('Write a reply',true); return; }
+  await axios.post('/api/owner/tickets/'+id+'/reply',{body,attach_url:a.url||'',attach_kind:a.kind||''},{headers:authHeaders()});
+  delete OATT[id]; loadTickets(); toast('Reply sent');
+}
+
+// CHECKOUT FIELDS editor (owner full flexibility)
+function viewCheckout(){
+  let fields=[]; try{ fields=JSON.parse(STATE.store.checkout_fields||''); }catch(e){}
+  if(!Array.isArray(fields)||!fields.length) fields=[
+    {key:'customer_name',label:'Your name',type:'text',required:true},
+    {key:'customer_phone',label:'Phone',type:'tel',required:true},
+    {key:'customer_email',label:'Email',type:'email',required:false},
+    {key:'addr_line',label:'Address',type:'text',required:false},
+    {key:'landmark',label:'Landmark',type:'text',required:false},
+    {key:'pincode',label:'PIN code',type:'text',required:false}
+  ];
+  CKF=fields;
+  setTimeout(renderCkf,0);
+  return card('<h3 class="font-bold mb-1">Checkout Fields</h3><p class="text-sm text-slate-500 mb-3">Decide what customers fill at checkout. Toggle mandatory/optional, add or remove fields. Address, landmark & PIN code are optional by default.</p><div id="ckfList" class="space-y-2"></div>'+
+    '<div class="flex gap-2 mt-3"><button onclick="addCkf()" class="bg-slate-100 px-3 py-2 rounded-lg text-sm font-semibold">+ Add field</button><button onclick="saveCkf()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Save</button></div>');
+}
+let CKF=[];
+function renderCkf(){
+  const el=$('ckfList'); if(!el)return;
+  el.innerHTML=CKF.map((f,i)=>'<div class="flex flex-wrap gap-2 items-center border rounded-lg p-2">'+
+    '<input value="'+esc(f.label)+'" onchange="CKF['+i+'].label=this.value" placeholder="Label" class="border rounded px-2 py-1 text-sm flex-1 min-w-[120px]">'+
+    '<input value="'+esc(f.key)+'" onchange="CKF['+i+'].key=this.value.replace(/[^a-z0-9_]/gi,\\'_\\')" placeholder="key" class="border rounded px-2 py-1 text-sm w-28">'+
+    '<select onchange="CKF['+i+'].type=this.value" class="border rounded px-2 py-1 text-sm">'+['text','tel','email','number'].map(t=>'<option '+(f.type===t?'selected':'')+'>'+t+'</option>').join('')+'</select>'+
+    '<label class="text-sm flex items-center gap-1"><input type="checkbox" '+(f.required?'checked':'')+' onchange="CKF['+i+'].required=this.checked"> required</label>'+
+    '<button onclick="CKF.splice('+i+',1);renderCkf()" class="text-red-500"><i class="fas fa-trash"></i></button></div>').join('');
+}
+function addCkf(){ CKF.push({key:'field_'+(CKF.length+1),label:'New field',type:'text',required:false}); renderCkf(); }
+async function saveCkf(){ const r=await saveStore({checkout_fields:JSON.stringify(CKF)}); toast(r.ok?'Checkout fields saved':'Error',!r.ok); }
+
+// REQUEST A FEATURE (owner -> platform)
+function viewRequest(){
+  const lowest = STATE.owner && (STATE.owner.plan==='trial'||STATE.owner.plan==='starter');
+  setTimeout(()=>{ const f=$('frForm'); if(f)f.addEventListener('submit',sendFeature); },0);
+  if(lowest) return card('<h3 class="font-bold mb-2">Request a Feature</h3><p class="text-sm text-slate-500">Custom feature requests are available on <b>Growth</b> and <b>Enterprise</b> plans. Upgrade to request new features for free (until high complexity).</p><button onclick="switchTab(\\'plan\\')" class="mt-3 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Upgrade Plan</button>');
+  return card('<h3 class="font-bold mb-1">Request a Feature</h3><p class="text-sm text-slate-500 mb-3">Need something custom? Tell us — we build most requests free (until high complexity). Our team will reach out from <b>care@nuvellestudio.store</b>.</p>'+
+    '<form id="frForm" class="space-y-3"><input id="frSub" placeholder="Feature title *" class="w-full border rounded-lg px-3 py-2"><textarea id="frBody" rows="4" placeholder="Describe what you need *" class="w-full border rounded-lg px-3 py-2"></textarea>'+
+    '<input type="file" id="frFile" accept="image/*" class="text-sm"><span id="frInfo" class="text-xs text-slate-400 block"></span>'+
+    '<button class="bg-indigo-600 text-white font-bold px-5 py-2.5 rounded-lg">Send Request</button> <span id="frMsg" class="text-sm ml-2"></span></form>');
+}
+let FRATT=null;
+function frAttachInit(){ const f=$('frFile'); if(f) f.onchange=()=>{ const file=f.files[0]; if(!file)return; if(file.size>800*1024){ toast('Max 800KB',true); f.value=''; return; } const r=new FileReader(); r.onload=()=>{ FRATT=r.result; $('frInfo').textContent='Attached: '+file.name; }; r.readAsDataURL(file); }; }
+async function sendFeature(e){ e.preventDefault(); const m=$('frMsg'); m.textContent='Sending...'; m.className='text-sm ml-2';
+  const {data}=await axios.post('/api/owner/feature-request',{subject:$('frSub').value,body:$('frBody').value,attach_url:FRATT||''},{headers:authHeaders()});
+  if(data.ok){ m.textContent='✓ '+data.message; m.className='text-sm ml-2 text-green-600'; $('frForm').reset(); FRATT=null; $('frInfo').textContent=''; }
+  else { m.textContent=data.error||'Failed'; m.className='text-sm ml-2 text-red-500'; }
 }
 
 // COUPONS
@@ -439,7 +530,7 @@ function bindPayForm(){ const f=$('payForm'); if(f){ f.addEventListener('submit'
 
 // hook form binding into switchTab
 const _switch = switchTab;
-switchTab = function(t){ _switch(t); if(t==='store') bindStoreForm(); if(t==='payments') bindPayForm(); };
+switchTab = function(t){ _switch(t); if(t==='store') bindStoreForm(); if(t==='payments') bindPayForm(); if(t==='request') setTimeout(frAttachInit,30); };
 
 async function reload(){ const {data}=await axios.get('/api/owner/dashboard',{headers:authHeaders()}); if(data.ok){ STATE={owner:data.owner,store:data.store,products:data.products,categories:data.categories,orders:data.orders,enquiries:data.enquiries,coupons:data.coupons}; } }
 
