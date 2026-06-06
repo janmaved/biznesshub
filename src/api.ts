@@ -141,7 +141,7 @@ api.put('/owner/store', async (c) => {
   if (!owner) return json(c, { ok: false, error: 'Unauthorized' }, 401)
   const store = await getOwnerStore(c.env.DB, owner.id)
   const b = await c.req.json()
-  const fields = ['name','category','theme','tagline','about','logo_url','cover_url','primary_color','accent_color',
+  const fields = ['name','category','theme','tagline','about','logo_url','logo_shape','cover_url','primary_color','accent_color',
     'currency','phone','whatsapp','email','address','pay_upi','pay_qr_url','pay_bank','pay_link','pay_gateway_enabled',
     'pay_provider','pay_key_id','pay_key_secret','pay_extra',
     'white_label','custom_domain','seo_title','seo_description','seo_keywords','is_published']

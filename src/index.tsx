@@ -29,7 +29,9 @@ app.get('/super', (c) => c.html(superApp()))
 // Public storefront: /s/:slug
 app.get('/s/:slug', async (c) => {
   const slug = c.req.param('slug')
-  const store = await c.env.DB.prepare('SELECT * FROM stores WHERE slug=? AND is_published=1').bind(slug).first<any>()
+  const store = await c.env.DB.prepare(
+    `SELECT s.*, o.plan AS owner_plan FROM stores s LEFT JOIN owners o ON o.id = s.owner_id WHERE s.slug=? AND s.is_published=1`
+  ).bind(slug).first<any>()
   if (!store) {
     return c.html('<h1 style="font-family:sans-serif;text-align:center;margin-top:80px">Store not found</h1>', 404)
   }

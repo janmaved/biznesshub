@@ -252,7 +252,9 @@ function viewStore(){
     <div class="md:col-span-2"><label class="text-sm font-medium">Tagline</label><input name="tagline" value="\${f('',s.tagline)}" class="w-full border rounded-lg px-3 py-2 mt-1"></div>
     <div class="md:col-span-2"><label class="text-sm font-medium">About</label><textarea name="about" rows="3" class="w-full border rounded-lg px-3 py-2 mt-1">\${f('',s.about)}</textarea></div>
     <div><label class="text-sm font-medium">Logo</label>\${imgField('logo_url',s.logo_url)}</div>
-    <div><label class="text-sm font-medium">Cover Image</label>\${imgField('cover_url',s.cover_url)}</div>
+    <div><label class="text-sm font-medium">Logo Shape</label><select name="logo_shape" class="w-full border rounded-lg px-3 py-2 mt-1">\${['circle','rounded','square','blob','ellipse'].map(x=>'<option value="'+x+'" '+((s.logo_shape||'circle')===x?'selected':'')+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>').join('')}</select>
+      <p class="text-xs text-slate-400 mt-1">Blob & ellipse give a modern designer look.</p></div>
+    <div class="md:col-span-2"><label class="text-sm font-medium">Cover Image</label>\${imgField('cover_url',s.cover_url)}</div>
     <div><label class="text-sm font-medium">Primary Color</label><input name="primary_color" type="color" value="\${s.primary_color||'#4f46e5'}" class="w-full border rounded-lg h-10 mt-1"></div>
     <div><label class="text-sm font-medium">Accent Color</label><input name="accent_color" type="color" value="\${s.accent_color||'#06b6d4'}" class="w-full border rounded-lg h-10 mt-1"></div>
     <div><label class="text-sm font-medium">Currency</label><input name="currency" value="\${f('INR',s.currency)}" class="w-full border rounded-lg px-3 py-2 mt-1"></div>

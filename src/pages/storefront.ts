@@ -15,7 +15,19 @@ export function storefrontPage(store: any): string {
   const primary = store.primary_color || th.primary
   const accent = store.accent_color || th.accent
   const dark = th.heroShape === 'dark'
-  const branding = store.white_label ? '' : `<a href="/" class="hover:underline">Powered by ${BRAND}</a>`
+  // White-label: lowest tier (trial/starter) always shows branding.
+  // Growth & Enterprise plans are fully white-label (branding hidden), as is
+  // any store with the white_label flag enabled.
+  const paidWhiteLabel = ['growth', 'enterprise'].includes(String(store.owner_plan || ''))
+  const branding = (store.white_label || paidWhiteLabel) ? '' : `<a href="/" class="hover:underline">Powered by ${BRAND}</a>`
+  // Logo shape: circle | rounded | square | blob | ellipse
+  const shape = store.logo_shape || 'circle'
+  const shapeCss = shape === 'circle' ? 'border-radius:50%'
+    : shape === 'square' ? 'border-radius:0'
+    : shape === 'rounded' ? 'border-radius:.6rem'
+    : shape === 'ellipse' ? 'border-radius:50%/35%'
+    : shape === 'blob' ? 'border-radius:42% 58% 63% 37% / 41% 44% 56% 59%'
+    : 'border-radius:.4rem'
 
   const ld = {
     '@context': 'https://schema.org',
@@ -103,11 +115,11 @@ export function storefrontPage(store: any): string {
   <header class="theme-hero">
     <nav class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
       <div class="flex items-center gap-2 font-bold text-lg">
-        ${store.logo_url ? `<img src="${esc(store.logo_url)}" class="w-9 h-9 rounded-full object-cover bg-white">` : '<i class="fas fa-store"></i>'}
+        ${store.logo_url ? `<img src="${esc(store.logo_url)}" class="w-10 h-10 object-cover bg-white" style="${shapeCss}">` : '<i class="fas fa-store"></i>'}
         <span>${esc(store.name)}</span>
       </div>
       <button onclick="openCart()" class="relative chip text-sm font-semibold">
-        <i class="fas fa-cart-shopping"></i> Cart <span id="cartCount" class="absolute -top-2 -right-2 bg-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center" style="color:var(--primary)">0</span>
+        <i class="fas fa-cart-shopping"></i> <span id="cartLabel">Cart</span> <span id="cartCount" class="absolute -top-2 -right-2 bg-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center" style="color:var(--primary)">0</span>
       </button>
     </nav>
     ${hero}
@@ -152,7 +164,7 @@ export function storefrontPage(store: any): string {
   <div id="cartDrawer" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black/40" onclick="closeCart()"></div>
     <div class="absolute right-0 top-0 h-full w-full max-w-md surface shadow-2xl flex flex-col">
-      <div class="p-4 border-b flex justify-between items-center"><h3 class="font-bold text-lg">Your Order</h3><button onclick="closeCart()"><i class="fas fa-times text-xl" style="color:var(--muted)"></i></button></div>
+      <div class="p-4 border-b flex justify-between items-center"><h3 id="orderTitle" class="font-bold text-lg">Your Order</h3><button onclick="closeCart()"><i class="fas fa-times text-xl" style="color:var(--muted)"></i></button></div>
       <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
       <div class="border-t p-4">
         <div class="flex justify-between font-bold text-lg mb-3"><span>Total</span><span id="cartTotal"></span></div>
@@ -163,7 +175,7 @@ export function storefrontPage(store: any): string {
             <input id="coEmail" placeholder="Email" class="border rounded-lg px-3 py-2 text-sm bg-transparent">
           </div>
           <input id="coAddr" placeholder="Delivery address (optional)" class="w-full border rounded-lg px-3 py-2 text-sm bg-transparent">
-          <button onclick="placeOrder()" class="w-full btn-primary font-bold py-3">Place Order</button>
+          <button id="placeBtn" onclick="placeOrder()" class="w-full btn-primary font-bold py-3">Place Order</button>
           <p id="orderResult" class="text-sm text-center"></p>
         </div>
         <div id="payInfo" class="hidden mt-3 rounded-lg p-3 text-sm" style="background:rgba(120,120,120,.08)"></div>
@@ -184,10 +196,22 @@ const SLUG=document.body.dataset.slug, CUR=document.body.dataset.currency;
 let STORE=null, PRODUCTS=[], CATS=[], COUPONS=[], CART=[];
 let activeCat='all';
 
+// Service-type aware wording: restaurant/food, salon/services book, retail shop.
+let LBL={add:'Add +',cart:'Cart',order:'Your Order',place:'Place Order',addr:'Delivery address (optional)'};
+function applyLabels(cat){
+  if(cat==='restaurant'){ LBL={add:'Add +',cart:'Cart',order:'Your Order',place:'Place Order',addr:'Delivery address (optional)'}; }
+  else if(cat==='salon'||cat==='services'){ LBL={add:'Book',cart:'Bookings',order:'Your Booking',place:'Confirm Booking',addr:'Preferred date / time / notes (optional)'}; }
+  else { LBL={add:'Add to Cart',cart:'Cart',order:'Your Cart',place:'Place Order',addr:'Shipping address (optional)'}; }
+  const cl=document.getElementById('cartLabel'); if(cl)cl.textContent=LBL.cart;
+  const ot=document.getElementById('orderTitle'); if(ot)ot.textContent=LBL.order;
+  const pb=document.getElementById('placeBtn'); if(pb)pb.textContent=LBL.place;
+  const ad=document.getElementById('coAddr'); if(ad)ad.placeholder=LBL.addr;
+}
 async function load(){
   const {data}=await axios.get('/api/store/'+SLUG);
   if(!data.ok) return;
   STORE=data.store; PRODUCTS=data.products; CATS=data.categories; COUPONS=data.coupons;
+  applyLabels(STORE.category);
   if(COUPONS.length){ document.getElementById('couponBar').classList.remove('hidden'); document.getElementById('couponBar').innerHTML='🎉 Offers: '+COUPONS.map(c=>'<b>'+c.code+'</b> ('+(c.discount_type==='percent'?c.discount_value+'% off':CUR+' '+c.discount_value+' off')+')').join(' · '); }
   renderCats(); renderProducts();
   greetChat();
@@ -212,7 +236,7 @@ function renderProducts(){
       '<div class="p-4"><div class="flex justify-between items-start"><h3 class="font-bold">'+esc(p.name)+'</h3>'+(p.is_featured?'<span class="text-amber-500 text-xs">★ Popular</span>':'')+'</div>'+
       (p.description?'<p class="text-sm mt-1" style="color:var(--muted)">'+esc(p.description)+'</p>':'')+
       '<div class="flex justify-between items-center mt-3"><div>'+(p.sale_price?'<span class="line-through text-sm mr-1" style="color:var(--muted)">'+CUR+' '+p.price+'</span>':'')+'<span class="font-bold text-primary">'+CUR+' '+price+'</span></div>'+
-      '<button onclick="addCart('+p.id+')" class="btn-primary text-sm font-semibold px-3 py-1.5">Add +</button></div></div></div>';
+      '<button onclick="addCart('+p.id+')" class="btn-primary text-sm font-semibold px-3 py-1.5">'+LBL.add+'</button></div></div></div>';
   }).join('');
 }
 function esc(s){return String(s||'').replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]))}
