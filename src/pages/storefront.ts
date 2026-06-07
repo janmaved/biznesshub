@@ -80,6 +80,11 @@ export function storefrontPage(store: any): string {
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <link href="${th.fontUrl}" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script>
+    firebase.initializeApp({apiKey:'AIzaSyCwunFhzHPak1xt-UpAevLr2ynaKeVeERE',authDomain:'storenest-3ffb3.firebaseapp.com',projectId:'storenest-3ffb3',storageBucket:'storenest-3ffb3.firebasestorage.app',messagingSenderId:'316714184995',appId:'1:316714184995:web:a8d40533f811d36d349c96'});
+  </script>
   <style>
     :root{--primary:${primary};--accent:${accent};--bg:${th.bg};--surface:${th.surface};--text:${th.text};--muted:${th.muted};--radius:${th.radius}}
     body{background:var(--bg);color:var(--text);font-family:${th.font}}
@@ -339,7 +344,7 @@ function accHeaders(){ return ACC?{'X-Customer-Id':ACC.id,'X-Customer-Token':ACC
 function refreshAccountBtn(){ const l=document.getElementById('accLabel'); if(l) l.textContent=ACC?(ACC.name.split(' ')[0]):'Account'; }
 function openAccount(){ document.getElementById('accDrawer').classList.remove('hidden'); ACC?renderAccount():renderAuth(); }
 function closeAccount(){ document.getElementById('accDrawer').classList.add('hidden'); }
-function logoutAcc(){ ACC=null; ACC_TOKEN=''; localStorage.removeItem('acc_'+SLUG); refreshAccountBtn(); renderAuth(); }
+function logoutAcc(){ try{ firebase.auth().signOut(); }catch(e){} ACC=null; ACC_TOKEN=''; localStorage.removeItem('acc_'+SLUG); refreshAccountBtn(); renderAuth(); }
 function renderAuth(){
   document.getElementById('accBody').innerHTML=
     '<div class="flex gap-2 mb-4"><button id="tabLogin" onclick="authTab(1)" class="flex-1 py-2 rounded-lg btn-primary text-sm font-semibold">Login</button><button id="tabSignup" onclick="authTab(0)" class="flex-1 py-2 rounded-lg text-sm font-semibold" style="background:rgba(120,120,120,.12)">Sign up</button></div>'+
@@ -361,11 +366,24 @@ function authTab(login){
 }
 async function doAuth(login){
   const m=document.getElementById('auMsg'); m.textContent='Please wait...'; m.className='text-sm text-center';
-  const body={email:document.getElementById('auEmail').value,password:document.getElementById('auPass').value};
-  if(!login){ body.name=document.getElementById('auName').value; body.phone=document.getElementById('auPhone').value; }
-  const {data}=await axios.post('/api/store/'+SLUG+'/customer/'+(login?'login':'signup'),body);
-  if(data.ok){ ACC=data.customer; ACC_TOKEN=data.token; localStorage.setItem('acc_'+SLUG,JSON.stringify({customer:ACC,token:ACC_TOKEN})); refreshAccountBtn(); renderAccount(); }
-  else { m.textContent=data.error||'Failed'; m.className='text-sm text-center text-red-500'; }
+  const email=document.getElementById('auEmail').value, password=document.getElementById('auPass').value;
+  const name=login?'':document.getElementById('auName').value, phone=login?'':document.getElementById('auPhone').value;
+  if(!email||!password){ m.textContent='Email & password required'; m.className='text-sm text-center text-red-500'; return; }
+  try{
+    const auth=firebase.auth();
+    const cred = login ? await auth.signInWithEmailAndPassword(email,password)
+                       : await auth.createUserWithEmailAndPassword(email,password);
+    const idToken = await cred.user.getIdToken();
+    const {data}=await axios.post('/api/store/'+SLUG+'/customer/firebase',{idToken,name,phone});
+    if(data.ok){ ACC=data.customer; ACC_TOKEN=data.token; localStorage.setItem('acc_'+SLUG,JSON.stringify({customer:ACC,token:ACC_TOKEN})); refreshAccountBtn(); renderAccount(); }
+    else { m.textContent=data.error||'Failed'; m.className='text-sm text-center text-red-500'; }
+  }catch(e){
+    var msg=(e&&e.code||'').replace('auth/','').replace(/-/g,' ');
+    if(e.code==='auth/email-already-in-use') msg='Email already registered — please login';
+    else if(e.code==='auth/invalid-credential'||e.code==='auth/wrong-password'||e.code==='auth/user-not-found') msg='Invalid email or password';
+    else if(e.code==='auth/weak-password') msg='Password must be at least 6 characters';
+    m.textContent=msg||'Failed'; m.className='text-sm text-center text-red-500';
+  }
 }
 let ACC_VIEW='orders';
 function renderAccount(){
