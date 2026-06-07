@@ -61,7 +61,7 @@ export function landingPage(): string {
   <div class="bg-white border-b py-6">
     <div class="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
       <div><div class="text-3xl font-extrabold text-indigo-600">5 min</div><div class="text-sm text-slate-500">Setup time</div></div>
-      <div><div class="text-3xl font-extrabold text-indigo-600">₹250</div><div class="text-sm text-slate-500">Starting price/mo</div></div>
+      <div><div class="text-3xl font-extrabold text-indigo-600">₹99</div><div class="text-sm text-slate-500">Starting price/mo</div></div>
       <div><div class="text-3xl font-extrabold text-indigo-600">20+</div><div class="text-sm text-slate-500">Premium themes</div></div>
       <div><div class="text-3xl font-extrabold text-indigo-600">24/7</div><div class="text-sm text-slate-500">AI chat support</div></div>
     </div>
@@ -172,15 +172,17 @@ function renderThemes(){
 
 function renderPricing(){
   document.getElementById('pricingGrid').innerHTML = META.plans.map(p=>\`
-    <div class="relative rounded-2xl border-2 \${p.popular?'border-indigo-500 shadow-xl':'border-slate-200'} bg-white p-6 flex flex-col">
+    <div class="relative rounded-2xl border-2 \${p.popular?'border-indigo-500 shadow-xl scale-[1.02]':'border-slate-200'} bg-white p-6 flex flex-col">
       \${p.popular?'<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">MOST POPULAR</span>':''}
+      \${p.deal?'<span class="self-start mb-2 bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 rounded-full">'+p.deal+'</span>':''}
       <h3 class="font-bold text-lg">\${p.name}</h3>
       <p class="text-slate-500 text-sm mb-4">\${p.tagline}</p>
-      <div class="mb-4"><span class="text-3xl font-extrabold">\${p.price===0?'Free':'₹'+p.price}</span><span class="text-slate-400 text-sm">/\${p.period}</span></div>
+      <div class="mb-1">\${p.price===0?'<span class="text-3xl font-extrabold">Free</span>':(p.mrp?'<span class="text-slate-400 line-through text-lg mr-2">₹'+p.mrp+'</span>':'')+'<span class="text-3xl font-extrabold">₹'+p.price+'</span><span class="text-slate-400 text-sm">/'+p.period+'</span>'}</div>
+      \${p.mrp&&p.price>0?'<p class="text-xs text-green-600 font-semibold mb-3">You save ₹'+(p.mrp-p.price)+' — best price anywhere</p>':'<div class="mb-3"></div>'}
       <ul class="space-y-2 text-sm flex-1">\${p.features.map(f=>'<li class="flex gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span>'+f+'</span></li>').join('')}</ul>
       \${p.price===0
         ? '<a href="/owner#signup" class="mt-5 block text-center bg-slate-800 text-white font-bold py-3 rounded-lg hover:bg-slate-900">Start Free Trial</a>'
-        : '<button onclick=\\'openBuy("'+p.key+'")\\' class="mt-5 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700">Subscribe</button>'}
+        : '<button onclick=\\'openBuy("'+p.key+'")\\' class="mt-5 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700">Get '+p.name+' →</button>'}
     </div>\`).join('');
 }
 
@@ -205,6 +207,7 @@ document.getElementById('buyForm').addEventListener('submit', async (e)=>{
       ownerId:Number(document.getElementById('buyOwnerId').value)||0
     });
     if(!data.ok){ msg.textContent=data.error; msg.className='text-sm text-center text-red-500'; return; }
+    if(data.mode==='link' && data.url){ msg.textContent='Redirecting to secure payment...'; window.location.href=data.url; return; }
     // auto-submit to PayU
     const form=document.createElement('form'); form.method='POST'; form.action=data.action;
     for(const k in data.fields){ const i=document.createElement('input'); i.type='hidden'; i.name=k; i.value=data.fields[k]; form.appendChild(i); }
@@ -219,6 +222,52 @@ if(ps){ const b=document.createElement('div'); b.className='fixed top-20 left-1/
 (async ()=>{
   const {data}=await axios.get('/api/meta'); META=data;
   renderFeatures(); renderThemes(); renderPricing();
+})();
+
+// ===== HELP / SUPPORT CHATBOT (platform) =====
+(function(){
+  const wrap=document.createElement('div'); wrap.innerHTML=
+  '<button id="hsBtn" class="fixed bottom-5 right-5 z-50 bg-indigo-600 text-white w-14 h-14 rounded-full shadow-xl text-xl flex items-center justify-center hover:bg-indigo-700"><i class="fas fa-headset"></i></button>'+
+  '<div id="hsBox" class="fixed bottom-24 right-5 z-50 w-80 max-w-[92vw] bg-white rounded-2xl shadow-2xl hidden flex-col border" style="height:460px">'+
+    '<div class="bg-indigo-600 text-white p-3 rounded-t-2xl flex justify-between items-center"><span class="font-bold"><i class="fas fa-headset mr-1"></i> Storenest Help</span><button id="hsClose"><i class="fas fa-times"></i></button></div>'+
+    '<div id="hsBody" class="flex-1 overflow-y-auto p-3 text-sm"></div>'+
+  '</div>';
+  document.body.appendChild(wrap);
+  const box=document.getElementById('hsBox');
+  document.getElementById('hsBtn').onclick=()=>{ box.classList.toggle('hidden'); box.classList.toggle('flex'); if(box.classList.contains('flex')) hsRender(); };
+  document.getElementById('hsClose').onclick=()=>{ box.classList.add('hidden'); box.classList.remove('flex'); };
+  window.hsState=JSON.parse(localStorage.getItem('hs_ticket')||'null');
+  window.hsRender=function(){
+    const b=document.getElementById('hsBody');
+    if(!window.hsState){
+      b.innerHTML='<p class="text-slate-500 mb-3">Hi! 👋 Ask us anything about Storenest, pricing, domains or get support. We reply from <b>care@nuvellestudio.store</b>.</p>'+
+        '<input id="hsName" placeholder="Your name" class="w-full border rounded-lg px-3 py-2 mb-2">'+
+        '<input id="hsEmail" type="email" placeholder="Your email *" class="w-full border rounded-lg px-3 py-2 mb-2">'+
+        '<input id="hsSub" placeholder="Subject *" class="w-full border rounded-lg px-3 py-2 mb-2">'+
+        '<textarea id="hsMsg" rows="3" placeholder="How can we help? *" class="w-full border rounded-lg px-3 py-2 mb-2"></textarea>'+
+        '<button onclick="hsSend()" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-lg">Send message</button><p id="hsErr" class="text-sm text-center mt-2"></p>';
+    } else { hsLoadThread(); }
+  };
+  window.hsSend=async function(){
+    const email=document.getElementById('hsEmail').value, subject=document.getElementById('hsSub').value, body=document.getElementById('hsMsg').value;
+    if(!email||!subject||!body){ document.getElementById('hsErr').textContent='Email, subject & message required'; document.getElementById('hsErr').className='text-sm text-center text-red-500'; return; }
+    const {data}=await axios.post('/api/support/ticket',{name:document.getElementById('hsName').value,email,subject,body});
+    if(data.ok){ window.hsState={id:data.ticketId,email}; localStorage.setItem('hs_ticket',JSON.stringify(window.hsState)); hsLoadThread(); }
+  };
+  window.hsLoadThread=async function(){
+    const b=document.getElementById('hsBody'); b.innerHTML='Loading...';
+    const {data}=await axios.get('/api/support/ticket/'+window.hsState.id+'?email='+encodeURIComponent(window.hsState.email));
+    if(!data.ok){ window.hsState=null; localStorage.removeItem('hs_ticket'); hsRender(); return; }
+    b.innerHTML='<p class="text-xs text-slate-400 mb-2">Ticket #'+data.ticket.id+' · '+data.ticket.status+'</p>'+
+      '<div class="space-y-2 mb-3">'+data.ticket.messages.map(m=>'<div class="'+(m.sender==='user'?'text-right':'text-left')+'"><span class="inline-block px-3 py-2 rounded-2xl '+(m.sender==='user'?'bg-indigo-600 text-white':'bg-slate-100')+'" style="max-width:85%">'+(m.body||'')+'</span><p class="text-[10px] text-slate-400">'+(m.sender==='user'?'You':'Storenest')+'</p></div>').join('')+'</div>'+
+      '<div class="flex gap-2"><input id="hsReply" placeholder="Reply..." class="flex-1 border rounded-lg px-3 py-2"><button onclick="hsReplySend()" class="bg-indigo-600 text-white px-3 rounded-lg">Send</button></div>'+
+      '<button onclick="localStorage.removeItem(\\'hs_ticket\\');window.hsState=null;hsRender()" class="text-xs text-slate-400 underline mt-2">New conversation</button>';
+  };
+  window.hsReplySend=async function(){
+    const v=document.getElementById('hsReply').value; if(!v)return;
+    await axios.post('/api/support/ticket/'+window.hsState.id+'/reply',{email:window.hsState.email,body:v});
+    hsLoadThread();
+  };
 })();
 </script>
 </body>

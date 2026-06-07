@@ -63,18 +63,24 @@ function renderDash(){
     <div class="bg-slate-800 rounded-xl overflow-hidden">
       <div class="p-4 border-b border-slate-700 font-bold">Business Owners</div>
       <div class="overflow-x-auto"><table class="w-full text-sm">
-        <thead><tr class="text-left text-slate-400 border-b border-slate-700"><th class="p-3">ID</th><th>Name</th><th>Store</th><th>Plan</th><th>Status</th><th>Free Access</th></tr></thead>
+        <thead><tr class="text-left text-slate-400 border-b border-slate-700"><th class="p-3">ID</th><th>Name</th><th>Store</th><th>Plan</th><th>Status</th><th>Domain</th><th>Free Access</th></tr></thead>
         <tbody>\${DATA.owners.map(o=>\`<tr class="border-b border-slate-700/50">
           <td class="p-3">\${o.id}</td>
           <td><b>\${o.name}</b><br><span class="text-xs text-slate-400">\${o.email}</span></td>
           <td>\${o.store_name?'<a class="text-indigo-400" target="_blank" href="/s/'+o.store_slug+'">'+o.store_name+'</a>':'—'}</td>
           <td><span class="capitalize bg-slate-700 px-2 py-1 rounded text-xs">\${o.plan}</span></td>
           <td>\${o.plan_status==='active'?'<span class="text-green-400">●</span> active':'<span class="text-red-400">●</span> '+o.plan_status}</td>
+          <td><div class="text-xs">\${o.subdomain?'<span class="text-indigo-300">'+o.subdomain+'.storenest.app</span><br>':''}\${o.custom_domain?'<span class="text-green-300">'+o.custom_domain+'</span><br>':''}<button onclick="openDomain(\${o.id})" class="mt-1 bg-slate-600 hover:bg-slate-500 px-2 py-1 rounded text-xs">\${(o.subdomain||o.custom_domain)?'Edit':'Connect'} domain</button></div></td>
           <td><button onclick="toggleUnlock(\${o.id},\${o.is_unlocked?0:1})" class="\${o.is_unlocked?'bg-green-600':'bg-slate-600'} px-3 py-1 rounded text-xs font-semibold">\${o.is_unlocked?'✓ Unlocked':'Unlock Free'}</button></td>
-        </tr>\`).join('')||'<tr><td colspan=6 class="p-6 text-center text-slate-500">No owners yet</td></tr>'}</tbody>
+        </tr>\`).join('')||'<tr><td colspan=7 class="p-6 text-center text-slate-500">No owners yet</td></tr>'}</tbody>
       </table></div>
     </div>
     <p class="text-xs text-slate-500 mt-4">Tip: "Unlock Free" gives an owner full enterprise access at no charge (for your own testing or special deals).</p>
+
+    <div class="bg-slate-800 rounded-xl overflow-hidden mt-6">
+      <div class="p-4 border-b border-slate-700 font-bold flex justify-between items-center"><span><i class="fas fa-headset mr-1 text-indigo-400"></i> Support Tickets</span><button onclick="loadTickets()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm"><i class="fas fa-rotate"></i> Refresh</button></div>
+      <div id="ticketBox" class="p-4 space-y-3 text-sm">Loading…</div>
+    </div>
   </div>
   <div id="pinModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50">
     <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-sm">
@@ -85,6 +91,30 @@ function renderDash(){
         <p id="cpMsg" class="text-sm text-center"></p>
       </form>
     </div>
+  </div>
+  <div id="domModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-md">
+      <h3 class="font-bold mb-1">Connect Domain</h3>
+      <p class="text-xs text-slate-400 mb-3">Starter plan → free subdomain. Growth/Enterprise → custom domain.</p>
+      <form id="domForm" class="space-y-3">
+        <input type="hidden" id="domOwner">
+        <div>
+          <label class="text-xs text-slate-400">Free subdomain</label>
+          <div class="flex items-center bg-slate-700 border border-slate-600 rounded-lg overflow-hidden">
+            <input id="domSub" oninput="$('domSubPrev').textContent=(this.value||'yourstore')" placeholder="yourstore" class="flex-1 bg-transparent px-3 py-2 outline-none">
+            <span class="px-2 text-slate-400 text-sm">.storenest.app</span>
+          </div>
+          <p class="text-xs text-indigo-300 mt-1">Preview: <span id="domSubPrev">yourstore</span>.storenest.app</p>
+        </div>
+        <div>
+          <label class="text-xs text-slate-400">Custom domain (optional)</label>
+          <input id="domCustom" placeholder="shop.example.com" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2">
+          <p class="text-xs text-slate-500 mt-1">Point the domain's CNAME to your Pages app, then save here.</p>
+        </div>
+        <div class="flex gap-2"><button class="flex-1 bg-indigo-600 py-2 rounded-lg font-semibold">Save</button><button type="button" onclick="$('domModal').classList.add('hidden')" class="flex-1 bg-slate-600 py-2 rounded-lg">Cancel</button></div>
+        <p id="domMsg" class="text-sm text-center"></p>
+      </form>
+    </div>
   </div>\`;
   $('cpForm').addEventListener('submit', async e=>{
     e.preventDefault(); const newPin=$('cpNew').value;
@@ -92,10 +122,42 @@ function renderDash(){
     if(data.ok){ PIN=newPin; sessionStorage.setItem('sb_super_pin',newPin); $('cpMsg').textContent='✓ PIN changed'; $('cpMsg').className='text-sm text-center text-green-400'; setTimeout(()=>$('pinModal').classList.add('hidden'),1000); }
     else { $('cpMsg').textContent=data.error; $('cpMsg').className='text-sm text-center text-red-400'; }
   });
+  $('domForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const ownerId=$('domOwner').value, subdomain=$('domSub').value.trim(), customDomain=$('domCustom').value.trim();
+    const {data}=await axios.post('/api/super/domain',{pin:PIN,ownerId,subdomain,customDomain});
+    if(data.ok){ $('domMsg').textContent='✓ Saved'; $('domMsg').className='text-sm text-center text-green-400'; setTimeout(()=>{$('domModal').classList.add('hidden'); loadDash();},800); }
+    else { $('domMsg').textContent=data.error||'Error'; $('domMsg').className='text-sm text-center text-red-400'; }
+  });
+  loadTickets();
 }
 function showChangePin(){ const m=$('pinModal'); m.classList.remove('hidden'); m.classList.add('flex'); }
 async function toggleUnlock(id,unlock){ await axios.post('/api/super/unlock',{pin:PIN,ownerId:id,unlock}); await loadDash(); }
 function logout(){ sessionStorage.removeItem('sb_super_pin'); loginScreen(); }
+
+function openDomain(id){
+  const o=DATA.owners.find(x=>x.id===id)||{};
+  $('domOwner').value=id; $('domSub').value=o.subdomain||''; $('domCustom').value=o.custom_domain||'';
+  $('domSubPrev').textContent=(o.subdomain||'yourstore'); $('domMsg').textContent='';
+  const m=$('domModal'); m.classList.remove('hidden'); m.classList.add('flex');
+}
+async function loadTickets(){
+  const box=$('ticketBox'); if(!box) return;
+  const {data}=await axios.post('/api/super/tickets',{pin:PIN});
+  if(!data.ok){ box.innerHTML='<p class="text-slate-500">Could not load.</p>'; return; }
+  if(!data.tickets.length){ box.innerHTML='<p class="text-slate-500">No tickets yet.</p>'; return; }
+  box.innerHTML=data.tickets.map(t=>\`
+    <div class="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
+      <div class="flex justify-between items-start"><div><b>\${t.subject}</b><br><span class="text-xs text-slate-400">#\${t.id} · \${t.name||'—'} · \${t.email}</span></div><span class="text-xs px-2 py-0.5 rounded \${t.status==='answered'?'bg-green-700':'bg-amber-700'}">\${t.status}</span></div>
+      <div class="space-y-1 my-2">\${(t.messages||[]).map(m=>'<div class="text-xs '+(m.sender==='user'?'text-slate-300':'text-indigo-300')+'"><b>'+(m.sender==='user'?'User':'You')+':</b> '+(m.body||'')+'</div>').join('')}</div>
+      <div class="flex gap-2"><input id="rt\${t.id}" placeholder="Reply…" class="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm"><button onclick="replyTicket(\${t.id})" class="bg-indigo-600 px-3 rounded text-sm">Send</button></div>
+    </div>\`).join('');
+}
+async function replyTicket(id){
+  const v=$('rt'+id).value; if(!v) return;
+  await axios.post('/api/super/tickets/'+id+'/reply',{pin:PIN,body:v});
+  loadTickets();
+}
 
 (async ()=>{ if(PIN){ await loadDash(); } else loginScreen(); })();
 </script>

@@ -48,7 +48,7 @@ api.post('/super/owners', async (c) => {
   const real = await getSuperPin(c.env.DB)
   if (pin !== real) return json(c, { ok: false, error: 'Unauthorized' }, 401)
   const owners = await c.env.DB.prepare(`
-    SELECT o.*, s.name as store_name, s.slug as store_slug
+    SELECT o.*, s.name as store_name, s.slug as store_slug, s.custom_domain as custom_domain, s.subdomain as subdomain
     FROM owners o LEFT JOIN stores s ON s.owner_id=o.id ORDER BY o.created_at DESC`).all()
   const subs = await c.env.DB.prepare('SELECT * FROM subscriptions ORDER BY created_at DESC LIMIT 50').all()
   return json(c, { ok: true, owners: owners.results, subscriptions: subs.results })
@@ -63,6 +63,83 @@ api.post('/super/unlock', async (c) => {
     .bind(unlock ? 1 : 0, unlock ? 'enterprise' : 'trial', 'active', ownerId).run()
   return json(c, { ok: true })
 })
+
+// Super admin: set / connect a store's custom domain or subdomain
+api.post('/super/domain', async (c) => {
+  const body = await c.req.json()
+  const { pin, ownerId, subdomain, status } = body
+  const custom_domain = body.custom_domain ?? body.customDomain
+  if (pin !== (await getSuperPin(c.env.DB))) return json(c, { ok: false, error: 'Unauthorized' }, 401)
+  const store = await c.env.DB.prepare('SELECT id FROM stores WHERE owner_id=?').bind(ownerId).first<any>()
+  if (!store) return json(c, { ok: false, error: 'Store not found' }, 404)
+  const dom = (custom_domain || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+  const sub = (subdomain || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
+  if (dom) { const d = await c.env.DB.prepare('SELECT id FROM stores WHERE custom_domain=? AND id<>?').bind(dom, store.id).first(); if (d) return json(c, { ok: false, error: 'Domain already in use' }, 400) }
+  if (sub) { const d = await c.env.DB.prepare('SELECT id FROM stores WHERE subdomain=? AND id<>?').bind(sub, store.id).first(); if (d) return json(c, { ok: false, error: 'Subdomain already in use' }, 400) }
+  await c.env.DB.prepare('UPDATE stores SET custom_domain=?, subdomain=?, domain_status=? WHERE id=?')
+    .bind(dom, sub, status || (dom || sub ? 'connected' : 'none'), store.id).run()
+  return json(c, { ok: true, custom_domain: dom, subdomain: sub })
+})
+
+// Super admin: view + reply to platform support tickets
+api.post('/super/tickets', async (c) => {
+  const { pin } = await c.req.json()
+  if (pin !== (await getSuperPin(c.env.DB))) return json(c, { ok: false, error: 'Unauthorized' }, 401)
+  const tickets = await c.env.DB.prepare('SELECT * FROM platform_tickets ORDER BY updated_at DESC LIMIT 100').all()
+  const out: any[] = []
+  for (const t of tickets.results as any[]) {
+    const msgs = await c.env.DB.prepare('SELECT sender,body,attach_url,attach_kind,created_at FROM platform_ticket_messages WHERE ticket_id=? ORDER BY id').bind(t.id).all()
+    out.push({ ...t, messages: msgs.results })
+  }
+  return json(c, { ok: true, tickets: out })
+})
+api.post('/super/tickets/:id/reply', async (c) => {
+  const { pin, body } = await c.req.json()
+  if (pin !== (await getSuperPin(c.env.DB))) return json(c, { ok: false, error: 'Unauthorized' }, 401)
+  const tid = c.req.param('id')
+  await c.env.DB.prepare('INSERT INTO platform_ticket_messages (ticket_id,sender,body) VALUES (?,?,?)').bind(tid, 'admin', body || '').run()
+  await c.env.DB.prepare("UPDATE platform_tickets SET status='answered', updated_at=datetime('now') WHERE id=?").bind(tid).run()
+  return json(c, { ok: true })
+})
+
+// PUBLIC: platform support ticket (from landing chatbot / help) -> care@nuvellestudio.store
+api.post('/support/ticket', async (c) => {
+  const b = await c.req.json()
+  if (!b.email || !b.subject || !b.body) return json(c, { ok: false, error: 'Email, subject and message required' }, 400)
+  const t = await c.env.DB.prepare("INSERT INTO platform_tickets (name,email,subject) VALUES (?,?,?)")
+    .bind(b.name || '', b.email, b.subject).run()
+  const tid = t.meta.last_row_id
+  await c.env.DB.prepare('INSERT INTO platform_ticket_messages (ticket_id,sender,body,attach_url,attach_kind) VALUES (?,?,?,?,?)')
+    .bind(tid, 'user', b.body, b.attach_url || '', b.attach_kind || '').run()
+  await forwardSupportEmail(c.env, b.email, b.subject, b.body).catch(() => {})
+  return json(c, { ok: true, ticketId: tid, message: 'Thanks! Our team will reply from care@nuvellestudio.store' })
+})
+api.get('/support/ticket/:id', async (c) => {
+  const id = c.req.param('id')
+  const email = c.req.query('email') || ''
+  const t = await c.env.DB.prepare('SELECT * FROM platform_tickets WHERE id=? AND email=?').bind(id, email).first<any>()
+  if (!t) return json(c, { ok: false, error: 'Not found' }, 404)
+  const msgs = await c.env.DB.prepare('SELECT sender,body,attach_url,attach_kind,created_at FROM platform_ticket_messages WHERE ticket_id=? ORDER BY id').bind(id).all()
+  return json(c, { ok: true, ticket: { ...t, messages: msgs.results } })
+})
+api.post('/support/ticket/:id/reply', async (c) => {
+  const id = c.req.param('id')
+  const b = await c.req.json()
+  const t = await c.env.DB.prepare('SELECT id FROM platform_tickets WHERE id=? AND email=?').bind(id, b.email || '').first()
+  if (!t) return json(c, { ok: false, error: 'Not found' }, 404)
+  await c.env.DB.prepare('INSERT INTO platform_ticket_messages (ticket_id,sender,body) VALUES (?,?,?)').bind(id, 'user', b.body || '').run()
+  await c.env.DB.prepare("UPDATE platform_tickets SET status='open', updated_at=datetime('now') WHERE id=?").bind(id).run()
+  return json(c, { ok: true })
+})
+
+async function forwardSupportEmail(env: any, from: string, subject: string, body: string) {
+  if (!env.RESEND_API_KEY) return
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: 'Storenest Support <care@nuvellestudio.store>', to: ['care@nuvellestudio.store'], reply_to: from, subject: `[Storenest Support] ${subject}`, text: `From: ${from}\n\n${body}` })
+  })
+}
 
 // ============================================================
 // OWNER AUTH (signup + PIN login)
