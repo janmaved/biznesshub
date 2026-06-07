@@ -1,30 +1,33 @@
 ============================================================
- STOREFRONT PRO - API KEYS SETUP GUIDE
+ STORENEST - SETUP & SECRETS GUIDE
 ============================================================
-GitHub blocks committing live Google/Gemini API keys (secret scanning),
-so the real keys are NOT stored in this repo. They live only in the
-local `.dev.vars` file and must be added to Cloudflare as secrets for
-production:
+Real API keys are NOT committed (GitHub secret scanning blocks them).
+They live only in the local `.dev.vars` file and must be added to
+Cloudflare as secrets for production:
 
-  npx wrangler pages secret put PAYU_KEY
-  npx wrangler pages secret put PAYU_SALT
-  npx wrangler pages secret put GROQ_API_KEY
-  npx wrangler pages secret put GEMINI_API_KEY
+  npx wrangler pages secret put PAYU_PAYMENT_LINK   # hosted PayU link (real subscription payments)
+  npx wrangler pages secret put PAYU_KEY            # PayU merchant key (fallback form flow)
+  npx wrangler pages secret put PAYU_SALT           # PayU salt
+  npx wrangler pages secret put GROQ_API_KEY        # Groq Cloud (AI live chat)
+  npx wrangler pages secret put GEMINI_API_KEY      # Google Gemini (reserved)
 
-Environment variables used by the app (src/types.ts -> Bindings):
-  PAYU_KEY        -> PayU merchant key (test)
-  PAYU_SALT       -> PayU salt (test)
-  GROQ_API_KEY    -> Groq Cloud (AI live chat)  [gsk_...]
-  GEMINI_API_KEY  -> Google Gemini (reserved)   [AQ....]
+Environment variables (src/types.ts -> Bindings):
+  PAYU_PAYMENT_LINK -> hosted PayU payment link (https://u.payu.in/...) used for
+                       platform subscription payments. This is REAL payment.
+  PAYU_KEY / PAYU_SALT -> only used as a fallback if no payment link is set.
+  GROQ_API_KEY      -> powers per-store AI live chat support.
+  GEMINI_API_KEY    -> reserved for future AI features.
 
---- Super Admin PIN (changeable in /super) ---
-SUPER_ADMIN_PIN = 2005####   (you can change it from the /super panel)
+--- Super Admin ---
+  Access /super . PIN is stored in DB (platform_settings.super_admin_pin)
+  and can be changed from the panel after first login.
 
---- Demo Owner Login ---
-email: demo@storebuilder.app
-PIN:   1234
-============================================================
-NOTE: You provided the real keys directly to the assistant; they are
-configured locally in `.dev.vars`. Keep that file private. To deploy,
-use the wrangler secret commands above with your real key values.
+--- Per-Store Payment Gateways (set by each business owner) ---
+  Owners connect their OWN gateway in Dashboard -> Payments so customers pay
+  them directly & seamlessly at checkout (any amount):
+    Razorpay  -> Key ID + Key Secret            (seamless popup, fully verified)
+    PayU      -> Merchant Key + Salt            (hosted redirect)
+    Cashfree  -> App ID + Secret Key            (hosted redirect)
+    PhonePe   -> Merchant ID + Salt Key + Index (hosted redirect)
+  Secrets are stored in D1 and are NEVER exposed on the public storefront API.
 ============================================================

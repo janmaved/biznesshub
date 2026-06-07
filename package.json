@@ -1,18 +1,18 @@
 {
-  "name": "storebuilder",
+  "name": "storenest",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:sandbox": "wrangler pages dev dist --d1=storebuilder-production --local --ip 0.0.0.0 --port 3000",
+    "dev:sandbox": "wrangler pages dev dist --d1=storenest-production --local --ip 0.0.0.0 --port 3000",
     "build": "vite build",
     "preview": "wrangler pages dev dist",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name storebuilder",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name storenest",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
-    "db:migrate:local": "wrangler d1 migrations apply storebuilder-production --local",
-    "db:migrate:prod": "wrangler d1 migrations apply storebuilder-production",
-    "db:seed": "wrangler d1 execute storebuilder-production --local --file=./seed.sql",
+    "db:migrate:local": "wrangler d1 migrations apply storenest-production --local",
+    "db:migrate:prod": "wrangler d1 migrations apply storenest-production",
+    "db:seed": "wrangler d1 execute storenest-production --local --file=./seed.sql",
     "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed"
   },
   "dependencies": {

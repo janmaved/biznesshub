@@ -4,7 +4,7 @@ export function ownerApp(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Owner Dashboard – StoreFront Pro</title>
+  <title>Owner Dashboard – Storenest</title>
   <meta name="robots" content="noindex">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛠️</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -33,7 +33,7 @@ function authScreen(mode){
   <div class="min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
       <div class="text-center mb-6">
-        <a href="/" class="text-2xl font-extrabold text-indigo-600"><i class="fas fa-store"></i> StoreFront Pro</a>
+        <a href="/" class="text-2xl font-extrabold text-indigo-600"><i class="fas fa-store"></i> Storenest</a>
         <p class="text-slate-500 mt-1">\${mode==='login'?'Owner Login':'Create your store'}</p>
       </div>
       <div class="flex bg-slate-100 rounded-lg p-1 mb-6">
@@ -42,7 +42,7 @@ function authScreen(mode){
       </div>
       \${mode==='login'?loginForm():signupForm()}
       <p id="authMsg" class="text-sm text-center mt-3"></p>
-      <p class="text-center text-xs text-slate-400 mt-4">Demo: email <b>demo@storebuilder.app</b> / PIN <b>1234</b></p>
+      <p class="text-center text-xs text-slate-400 mt-4">🔒 Your store, your data. We never share your details.</p>
     </div>
   </div>\`;
   if(mode==='signup'){ $('suCat').innerHTML = META.categories.map(c=>'<option value="'+c.key+'">'+c.label+'</option>').join(''); }
@@ -112,7 +112,7 @@ function renderDashboard(){
     <!-- Sidebar -->
     <aside class="md:w-64 bg-slate-900 text-slate-300 md:min-h-screen">
       <div class="p-5 border-b border-slate-800">
-        <a href="/" class="font-extrabold text-white text-lg"><i class="fas fa-store text-indigo-400"></i> StoreFront</a>
+        <a href="/" class="font-extrabold text-white text-lg"><i class="fas fa-store text-indigo-400"></i> Storenest</a>
         <p class="text-xs text-slate-500 mt-1 truncate">\${s.name}</p>
       </div>
       <nav class="p-3 space-y-1" id="navMenu"></nav>
@@ -126,7 +126,7 @@ function renderDashboard(){
       <div class="flex items-center justify-between mb-6 flex-wrap gap-2">
         <div>
           <h1 class="text-2xl font-bold" id="tabTitle"></h1>
-          <p class="text-sm text-slate-500">Owner ID: <b>\${STATE.owner.id}</b> · \${planBadge()}</p>
+          <p class="text-sm text-slate-500">\${planBadge()}</p>
         </div>
         <div class="text-sm text-slate-500">Store URL: <a class="text-indigo-600 font-medium" href="/s/\${s.slug}" target="_blank">/s/\${s.slug}</a></div>
       </div>
@@ -136,7 +136,7 @@ function renderDashboard(){
   renderNav(); switchTab(tab);
 }
 
-const NAV=[['overview','Overview','fa-gauge'],['store','Store Settings','fa-gear'],['themes','Themes','fa-palette'],['products','Products / Menu','fa-box'],['orders','Orders','fa-cart-shopping'],['enquiries','Enquiries','fa-envelope'],['coupons','Offers & Coupons','fa-tags'],['payments','Payments','fa-indian-rupee-sign'],['plan','Plan & Billing','fa-crown'],['security','Security','fa-lock']];
+const NAV=[['overview','Overview','fa-gauge'],['store','Store Settings','fa-gear'],['themes','Themes','fa-palette'],['products','Products / Menu','fa-box'],['orders','Orders','fa-cart-shopping'],['enquiries','Enquiries','fa-envelope'],['support','Support & Feedback','fa-headset'],['coupons','Offers & Coupons','fa-tags'],['checkout','Checkout Fields','fa-list-check'],['payments','Payments','fa-indian-rupee-sign'],['plan','Plan & Billing','fa-crown'],['request','Request a Feature','fa-wand-magic-sparkles'],['security','Security','fa-lock']];
 
 function renderNav(){
   $('navMenu').innerHTML = NAV.map(n=>\`
@@ -155,13 +155,75 @@ function switchTab(t){ tab=t; renderNav();
   if(t==='products'){ c.innerHTML=viewProducts(); }
   if(t==='orders') c.innerHTML=viewOrders();
   if(t==='enquiries') c.innerHTML=viewEnquiries();
+  if(t==='support'){ c.innerHTML=viewSupport(); loadTickets(); }
   if(t==='coupons') c.innerHTML=viewCoupons();
+  if(t==='checkout') c.innerHTML=viewCheckout();
   if(t==='payments') c.innerHTML=viewPayments();
   if(t==='plan') c.innerHTML=viewPlan();
+  if(t==='request') c.innerHTML=viewRequest();
   if(t==='security') c.innerHTML=viewSecurity();
 }
 
 function card(content,cls=''){ return '<div class="bg-white rounded-xl shadow-sm p-5 '+cls+'">'+content+'</div>'; }
+
+// ---------------- MEDIA / IMAGE FIELD ----------------
+// Renders an image input that supports: paste URL, upload a file, or pick from
+// the store's media library. The actual value is kept in a hidden input <name>.
+let MEDIA=[]; let mediaTarget=null;
+function imgField(name,val){
+  val=val||'';
+  const id='if_'+name;
+  return '<div class="mt-1">'+
+    '<input type="hidden" name="'+name+'" id="'+id+'" value="'+(val.replace(/"/g,'&quot;'))+'">'+
+    '<div class="flex items-center gap-2">'+
+      '<div id="'+id+'_prev" class="w-12 h-12 rounded bg-slate-100 flex items-center justify-center text-slate-300 overflow-hidden shrink-0">'+(val?'<img src="'+val+'" class="w-full h-full object-cover">':'<i class="fas fa-image"></i>')+'</div>'+
+      '<input id="'+id+'_url" value="'+(val.startsWith('data:')?'':val.replace(/"/g,'&quot;'))+'" placeholder="Paste image URL or upload →" class="flex-1 border rounded-lg px-3 py-2 text-sm" oninput="setImg(\\''+id+'\\',this.value)">'+
+      '<label class="bg-slate-100 hover:bg-slate-200 cursor-pointer text-sm px-3 py-2 rounded-lg whitespace-nowrap"><i class="fas fa-upload"></i> Upload<input type="file" accept="image/*,video/*" class="hidden" onchange="uploadImg(event,\\''+id+'\\')"></label>'+
+      '<button type="button" onclick="openLibrary(\\''+id+'\\')" class="bg-slate-100 hover:bg-slate-200 text-sm px-3 py-2 rounded-lg whitespace-nowrap"><i class="fas fa-images"></i></button>'+
+    '</div></div>';
+}
+function setImg(id,val){ $(id).value=val; const p=$(id+'_prev'); p.innerHTML=val?'<img src="'+val+'" class="w-full h-full object-cover">':'<i class="fas fa-image"></i>'; }
+async function uploadImg(ev,id){
+  const file=ev.target.files[0]; if(!file)return;
+  if(file.size>800*1024){ toast('File too large (max 800KB). Compress it or use a URL.',true); ev.target.value=''; return; }
+  const reader=new FileReader();
+  reader.onload=async()=>{
+    try{
+      const {data}=await axios.post('/api/owner/media',{name:file.name,data:reader.result},{headers:authHeaders()});
+      if(data.ok){ setImg(id,data.data); const u=$(id+'_url'); if(u)u.value=''; toast('Uploaded & saved to library'); }
+      else toast(data.error||'Upload failed',true);
+    }catch(e){ toast('Upload failed',true); }
+  };
+  reader.readAsDataURL(file);
+}
+async function openLibrary(id){
+  mediaTarget=id;
+  try{ const {data}=await axios.get('/api/owner/media',{headers:authHeaders()}); if(data.ok)MEDIA=data.media; }catch(e){}
+  let modal=$('mediaModal');
+  if(!modal){ modal=document.createElement('div'); modal.id='mediaModal'; modal.className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4'; document.body.appendChild(modal); }
+  modal.style.display='flex';
+  modal.innerHTML='<div class="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">'+
+    '<div class="p-4 border-b flex justify-between items-center"><h3 class="font-bold">Media Library</h3><div class="flex gap-2"><label class="bg-indigo-600 text-white text-sm px-3 py-1.5 rounded-lg cursor-pointer"><i class="fas fa-upload"></i> Upload<input type="file" accept="image/*,video/*" class="hidden" onchange="libUpload(event)"></label><button onclick="closeLibrary()" class="text-slate-400"><i class="fas fa-times text-xl"></i></button></div></div>'+
+    '<div id="mediaGrid" class="p-4 overflow-y-auto grid grid-cols-3 sm:grid-cols-4 gap-3">'+mediaGridHtml()+'</div></div>';
+}
+function mediaGridHtml(){
+  if(!MEDIA.length) return '<p class="col-span-full text-center text-slate-400 py-8 text-sm">No files yet. Upload images or videos to reuse them anywhere.</p>';
+  return MEDIA.map(m=>'<div class="relative group border rounded-lg overflow-hidden">'+
+    (m.kind==='video'?'<video src="'+m.data+'" class="w-full h-24 object-cover"></video>':'<img src="'+m.data+'" class="w-full h-24 object-cover">')+
+    '<button onclick="pickMedia('+m.id+')" class="absolute inset-0 bg-indigo-600/0 group-hover:bg-indigo-600/30 transition flex items-center justify-center text-white opacity-0 group-hover:opacity-100"><i class="fas fa-check-circle text-2xl"></i></button>'+
+    '<button onclick="delMedia('+m.id+')" class="absolute top-1 right-1 bg-red-500 text-white w-6 h-6 rounded-full text-xs opacity-0 group-hover:opacity-100"><i class="fas fa-trash"></i></button>'+
+    '</div>').join('');
+}
+function pickMedia(mid){ const m=MEDIA.find(x=>x.id===mid); if(m&&mediaTarget){ setImg(mediaTarget,m.data); const u=$(mediaTarget+'_url'); if(u)u.value=''; } closeLibrary(); }
+async function libUpload(ev){
+  const file=ev.target.files[0]; if(!file)return;
+  if(file.size>800*1024){ toast('File too large (max 800KB).',true); return; }
+  const reader=new FileReader();
+  reader.onload=async()=>{ const {data}=await axios.post('/api/owner/media',{name:file.name,data:reader.result},{headers:authHeaders()}); if(data.ok){ MEDIA.unshift({id:data.id,kind:data.kind,data:data.data}); $('mediaGrid').innerHTML=mediaGridHtml(); toast('Uploaded'); } else toast(data.error||'Failed',true); };
+  reader.readAsDataURL(file);
+}
+async function delMedia(mid){ if(!confirm('Delete this file?'))return; await axios.delete('/api/owner/media/'+mid,{headers:authHeaders()}); MEDIA=MEDIA.filter(x=>x.id!==mid); $('mediaGrid').innerHTML=mediaGridHtml(); }
+function closeLibrary(){ const m=$('mediaModal'); if(m)m.style.display='none'; }
 
 // OVERVIEW
 function viewOverview(){
@@ -192,8 +254,10 @@ function viewStore(){
     <div><label class="text-sm font-medium">Category</label><select name="category" class="w-full border rounded-lg px-3 py-2 mt-1">\${META.categories.map(c=>'<option value="'+c.key+'" '+(s.category===c.key?'selected':'')+'>'+c.label+'</option>').join('')}</select></div>
     <div class="md:col-span-2"><label class="text-sm font-medium">Tagline</label><input name="tagline" value="\${f('',s.tagline)}" class="w-full border rounded-lg px-3 py-2 mt-1"></div>
     <div class="md:col-span-2"><label class="text-sm font-medium">About</label><textarea name="about" rows="3" class="w-full border rounded-lg px-3 py-2 mt-1">\${f('',s.about)}</textarea></div>
-    <div><label class="text-sm font-medium">Logo URL</label><input name="logo_url" value="\${f('',s.logo_url)}" placeholder="https://..." class="w-full border rounded-lg px-3 py-2 mt-1"></div>
-    <div><label class="text-sm font-medium">Cover Image URL</label><input name="cover_url" value="\${f('',s.cover_url)}" placeholder="https://..." class="w-full border rounded-lg px-3 py-2 mt-1"></div>
+    <div><label class="text-sm font-medium">Logo</label>\${imgField('logo_url',s.logo_url)}</div>
+    <div><label class="text-sm font-medium">Logo Shape</label><select name="logo_shape" class="w-full border rounded-lg px-3 py-2 mt-1">\${['circle','rounded','square','blob','ellipse'].map(x=>'<option value="'+x+'" '+((s.logo_shape||'circle')===x?'selected':'')+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>').join('')}</select>
+      <p class="text-xs text-slate-400 mt-1">Blob & ellipse give a modern designer look.</p></div>
+    <div class="md:col-span-2"><label class="text-sm font-medium">Cover Image</label>\${imgField('cover_url',s.cover_url)}</div>
     <div><label class="text-sm font-medium">Primary Color</label><input name="primary_color" type="color" value="\${s.primary_color||'#4f46e5'}" class="w-full border rounded-lg h-10 mt-1"></div>
     <div><label class="text-sm font-medium">Accent Color</label><input name="accent_color" type="color" value="\${s.accent_color||'#06b6d4'}" class="w-full border rounded-lg h-10 mt-1"></div>
     <div><label class="text-sm font-medium">Currency</label><input name="currency" value="\${f('INR',s.currency)}" class="w-full border rounded-lg px-3 py-2 mt-1"></div>
@@ -256,14 +320,14 @@ function productForm(){ return \`<form id="prodForm" class="space-y-2">
     <input id="pSale" type="number" step="0.01" placeholder="Sale price (opt)" class="border rounded-lg px-3 py-2 text-sm">
   </div>
   <select id="pCat" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="">No category</option>\${STATE.categories.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('')}</select>
-  <input id="pImg" placeholder="Image URL (https://...)" class="w-full border rounded-lg px-3 py-2 text-sm">
+  <label class="text-xs text-slate-500">Product Image</label>\${imgField('pImg','')}
   <div class="flex gap-4 text-sm"><label class="flex items-center gap-1"><input type="checkbox" id="pStock" checked> In stock</label><label class="flex items-center gap-1"><input type="checkbox" id="pFeat"> Featured</label></div>
   <button class="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg text-sm">Save Product</button>
 </form>\`; }
 function bindProductForm(){
   const f=$('prodForm'); if(f) f.addEventListener('submit', async e=>{
     e.preventDefault();
-    const body={category_id:$('pCat').value||null,name:$('pName').value,description:$('pDesc').value,price:Number($('pPrice').value),sale_price:$('pSale').value?Number($('pSale').value):null,image_url:$('pImg').value,in_stock:$('pStock').checked,is_featured:$('pFeat').checked};
+    const body={category_id:$('pCat').value||null,name:$('pName').value,description:$('pDesc').value,price:Number($('pPrice').value),sale_price:$('pSale').value?Number($('pSale').value):null,image_url:$('if_pImg').value,in_stock:$('pStock').checked,is_featured:$('pFeat').checked};
     const id=$('pId').value;
     if(id) await axios.put('/api/owner/products/'+id,body,{headers:authHeaders()});
     else await axios.post('/api/owner/products',body,{headers:authHeaders()});
@@ -273,24 +337,112 @@ function bindProductForm(){
     e.preventDefault(); await axios.post('/api/owner/categories',{name:$('catName').value},{headers:authHeaders()}); await reload(); switchTab('products');
   });
 }
-function editProduct(id){ const p=STATE.products.find(x=>x.id===id); switchTab('products'); setTimeout(()=>{ $('pId').value=p.id;$('pName').value=p.name;$('pDesc').value=p.description||'';$('pPrice').value=p.price;$('pSale').value=p.sale_price||'';$('pCat').value=p.category_id||'';$('pImg').value=p.image_url||'';$('pStock').checked=!!p.in_stock;$('pFeat').checked=!!p.is_featured; },50); }
+function editProduct(id){ const p=STATE.products.find(x=>x.id===id); switchTab('products'); setTimeout(()=>{ $('pId').value=p.id;$('pName').value=p.name;$('pDesc').value=p.description||'';$('pPrice').value=p.price;$('pSale').value=p.sale_price||'';$('pCat').value=p.category_id||'';setImg('if_pImg',p.image_url||'');const u=$('if_pImg_url');if(u)u.value=(p.image_url||'').startsWith('data:')?'':(p.image_url||'');$('pStock').checked=!!p.in_stock;$('pFeat').checked=!!p.is_featured; },50); }
 async function delProduct(id){ if(!confirm('Delete this product?'))return; await axios.delete('/api/owner/products/'+id,{headers:authHeaders()}); await reload(); switchTab('products'); }
 async function delCat(id){ await axios.delete('/api/owner/categories/'+id,{headers:authHeaders()}); await reload(); switchTab('products'); }
 
 // ORDERS
 function viewOrders(){
   if(!STATE.orders.length) return card('<p class="text-slate-400">No orders yet.</p>');
-  return card('<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Action</th></tr></thead><tbody>'+
-    STATE.orders.map(o=>{ let items=''; try{items=JSON.parse(o.items_json).map(i=>i.name+' x'+i.qty).join(', ')}catch(e){}
-    return '<tr class="border-b"><td class="py-2"><b>'+o.customer_name+'</b><br><span class="text-xs text-slate-400">'+(o.customer_phone||'')+'</span></td><td class="text-xs">'+items+'</td><td class="font-semibold">'+STATE.store.currency+' '+o.total+'</td><td><span class="text-xs px-2 py-1 rounded '+(o.status==='completed'?'bg-green-100 text-green-700':o.status==='cancelled'?'bg-red-100 text-red-700':'bg-amber-100 text-amber-700')+'">'+o.status+'</span></td>'+
-    '<td><select onchange=\\'updOrder('+o.id+',this.value)\\' class="border rounded text-xs px-1 py-1"><option>change</option><option value="confirmed">Confirm</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select></td></tr>'; }).join('')+'</tbody></table></div>');
+  return STATE.orders.map(o=>{ let items=''; try{items=JSON.parse(o.items_json).map(i=>i.name+' x'+i.qty).join(', ')}catch(e){}
+    const payCls=o.payment_status==='paid'?'bg-green-100 text-green-700':o.payment_status==='pending_verify'?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600';
+    return card('<div class="flex flex-wrap justify-between gap-2"><div><p class="font-bold">'+(o.order_code||('#'+o.id))+' · '+o.customer_name+'</p>'+
+      '<p class="text-xs text-slate-400">'+(o.customer_phone||'')+' '+(o.customer_email||'')+'</p>'+
+      (o.address?'<p class="text-xs text-slate-500 mt-1"><i class="fas fa-location-dot"></i> '+esc(o.address)+'</p>':'')+
+      '<p class="text-sm mt-2">'+esc(items)+'</p>'+
+      (o.payment_utr?'<p class="text-xs mt-1">UTR/Txn: <b class="font-mono">'+esc(o.payment_utr)+'</b></p>':'')+'</div>'+
+      '<div class="text-right"><p class="font-bold text-lg">'+STATE.store.currency+' '+o.total+'</p>'+
+      '<span class="text-xs px-2 py-1 rounded '+(o.status==='completed'?'bg-green-100 text-green-700':o.status==='cancelled'?'bg-red-100 text-red-700':'bg-amber-100 text-amber-700')+'">'+o.status+'</span> '+
+      '<span class="text-xs px-2 py-1 rounded '+payCls+'">'+o.payment_status+'</span></div></div>'+
+      '<div class="flex flex-wrap gap-2 mt-3 items-center">'+
+      '<select onchange=\\'updOrder('+o.id+',this.value)\\' class="border rounded text-xs px-2 py-1"><option>Set status</option><option value="confirmed">Confirm</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>'+
+      '<button onclick=\\'markPaid('+o.id+')\\' class="text-xs bg-green-600 text-white px-2 py-1 rounded">Mark Paid</button>'+
+      '<input id="trk'+o.id+'" value="'+esc(o.tracking_link||'')+'" placeholder="Delivery tracking link" class="border rounded text-xs px-2 py-1 flex-1 min-w-[160px]">'+
+      '<button onclick=\\'saveTrack('+o.id+')\\' class="text-xs bg-indigo-600 text-white px-2 py-1 rounded">Save Link</button></div>','mb-3');
+  }).join('');
 }
-async function updOrder(id,status){ if(status==='change')return; await axios.put('/api/owner/orders/'+id,{status},{headers:authHeaders()}); await reload(); switchTab('orders'); }
+async function updOrder(id,status){ if(status==='Set status')return; await axios.put('/api/owner/orders/'+id,{status},{headers:authHeaders()}); await reload(); switchTab('orders'); }
+async function markPaid(id){ await axios.put('/api/owner/orders/'+id,{payment_status:'paid'},{headers:authHeaders()}); await reload(); switchTab('orders'); toast('Marked paid'); }
+async function saveTrack(id){ await axios.put('/api/owner/orders/'+id,{tracking_link:$('trk'+id).value},{headers:authHeaders()}); await reload(); switchTab('orders'); toast('Tracking link saved'); }
 
 // ENQUIRIES
 function viewEnquiries(){
   if(!STATE.enquiries.length) return card('<p class="text-slate-400">No enquiries yet.</p>');
   return STATE.enquiries.map(e=>card('<div class="flex justify-between items-start"><div><p class="font-semibold">'+(e.name||'Anonymous')+' <span class="text-xs '+(e.source==='ai_chat'?'bg-purple-100 text-purple-700':'bg-slate-100 text-slate-600')+' px-2 py-0.5 rounded ml-1">'+e.source+'</span></p><p class="text-xs text-slate-400">'+(e.phone||'')+' '+(e.email||'')+'</p><p class="mt-2 text-sm">'+e.message+'</p></div><span class="text-xs '+(e.status==='new'?'bg-indigo-100 text-indigo-700':'bg-slate-100 text-slate-500')+' px-2 py-1 rounded">'+e.status+'</span></div>','mb-3')).join('');
+}
+
+function esc(s){return String(s==null?'':s).replace(/[<>&"]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[m]))}
+
+// SUPPORT & FEEDBACK (customer tickets)
+function viewSupport(){ return '<div id="ticketList">'+card('<p class="text-slate-400">Loading conversations...</p>')+'</div>'; }
+async function loadTickets(){
+  const {data}=await axios.get('/api/owner/tickets',{headers:authHeaders()});
+  const el=$('ticketList'); if(!el)return;
+  if(!data.ok||!data.tickets.length){ el.innerHTML=card('<p class="text-slate-400">No support messages or feedback yet. Customers can send these from their account on your store.</p>'); return; }
+  el.innerHTML=data.tickets.map(t=>card(
+    '<div class="flex justify-between items-center mb-2"><div><p class="font-bold">'+esc(t.subject)+'</p><p class="text-xs text-slate-400">'+esc(t.customer_name)+' · '+esc(t.customer_email)+'</p></div><span class="text-xs px-2 py-1 rounded '+(t.status==='answered'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700')+'">'+t.status+'</span></div>'+
+    '<div class="space-y-2 mb-3">'+t.messages.map(m=>otMsg(m)).join('')+'</div>'+
+    '<div class="flex gap-2 items-center"><input id="orep'+t.id+'" placeholder="Type your reply..." class="flex-1 border rounded-lg px-3 py-2 text-sm"><input type="file" id="orepf'+t.id+'" accept="image/*,video/*" class="hidden" onchange="otAttach('+t.id+')"><button onclick="document.getElementById(\\'orepf'+t.id+'\\').click()" class="px-2 text-slate-500" title="Attach"><i class="fas fa-paperclip"></i></button><button onclick="ownerReply('+t.id+')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Send</button></div><span id="oratt'+t.id+'" class="text-xs text-slate-400"></span>','mb-3')).join('');
+}
+function otMsg(m){
+  const mine=m.sender==='owner';
+  let att=''; if(m.attach_url){ att=m.attach_kind==='video'?'<video src="'+m.attach_url+'" controls class="mt-1 rounded max-w-[200px]"></video>':'<img src="'+m.attach_url+'" class="mt-1 rounded max-w-[200px]">'; }
+  return '<div class="'+(mine?'text-right':'text-left')+'"><span class="inline-block px-3 py-2 rounded-2xl text-sm '+(mine?'bg-indigo-600 text-white':'bg-slate-100')+'" style="max-width:80%">'+(m.body?esc(m.body):'')+att+'</span><p class="text-[10px] text-slate-400">'+(mine?'You (owner)':'Customer')+'</p></div>';
+}
+let OATT={};
+function otAttach(id){ const f=$('orepf'+id).files[0]; if(!f)return; if(f.size>800*1024){ toast('Max 800KB',true); return; } const r=new FileReader(); r.onload=()=>{ OATT[id]={url:r.result,kind:f.type.startsWith('video')?'video':'image'}; $('oratt'+id).textContent='Attached: '+f.name; }; r.readAsDataURL(f); }
+async function ownerReply(id){
+  const body=$('orep'+id).value; const a=OATT[id]||{};
+  if(!body&&!a.url){ toast('Write a reply',true); return; }
+  await axios.post('/api/owner/tickets/'+id+'/reply',{body,attach_url:a.url||'',attach_kind:a.kind||''},{headers:authHeaders()});
+  delete OATT[id]; loadTickets(); toast('Reply sent');
+}
+
+// CHECKOUT FIELDS editor (owner full flexibility)
+function viewCheckout(){
+  let fields=[]; try{ fields=JSON.parse(STATE.store.checkout_fields||''); }catch(e){}
+  if(!Array.isArray(fields)||!fields.length) fields=[
+    {key:'customer_name',label:'Your name',type:'text',required:true},
+    {key:'customer_phone',label:'Phone',type:'tel',required:true},
+    {key:'customer_email',label:'Email',type:'email',required:false},
+    {key:'addr_line',label:'Address',type:'text',required:false},
+    {key:'landmark',label:'Landmark',type:'text',required:false},
+    {key:'pincode',label:'PIN code',type:'text',required:false}
+  ];
+  CKF=fields;
+  setTimeout(renderCkf,0);
+  return card('<h3 class="font-bold mb-1">Checkout Fields</h3><p class="text-sm text-slate-500 mb-3">Decide what customers fill at checkout. Toggle mandatory/optional, add or remove fields. Address, landmark & PIN code are optional by default.</p><div id="ckfList" class="space-y-2"></div>'+
+    '<div class="flex gap-2 mt-3"><button onclick="addCkf()" class="bg-slate-100 px-3 py-2 rounded-lg text-sm font-semibold">+ Add field</button><button onclick="saveCkf()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Save</button></div>');
+}
+let CKF=[];
+function renderCkf(){
+  const el=$('ckfList'); if(!el)return;
+  el.innerHTML=CKF.map((f,i)=>'<div class="flex flex-wrap gap-2 items-center border rounded-lg p-2">'+
+    '<input value="'+esc(f.label)+'" onchange="CKF['+i+'].label=this.value" placeholder="Label" class="border rounded px-2 py-1 text-sm flex-1 min-w-[120px]">'+
+    '<input value="'+esc(f.key)+'" onchange="CKF['+i+'].key=this.value.replace(/[^a-z0-9_]/gi,\\'_\\')" placeholder="key" class="border rounded px-2 py-1 text-sm w-28">'+
+    '<select onchange="CKF['+i+'].type=this.value" class="border rounded px-2 py-1 text-sm">'+['text','tel','email','number'].map(t=>'<option '+(f.type===t?'selected':'')+'>'+t+'</option>').join('')+'</select>'+
+    '<label class="text-sm flex items-center gap-1"><input type="checkbox" '+(f.required?'checked':'')+' onchange="CKF['+i+'].required=this.checked"> required</label>'+
+    '<button onclick="CKF.splice('+i+',1);renderCkf()" class="text-red-500"><i class="fas fa-trash"></i></button></div>').join('');
+}
+function addCkf(){ CKF.push({key:'field_'+(CKF.length+1),label:'New field',type:'text',required:false}); renderCkf(); }
+async function saveCkf(){ const r=await saveStore({checkout_fields:JSON.stringify(CKF)}); toast(r.ok?'Checkout fields saved':'Error',!r.ok); }
+
+// REQUEST A FEATURE (owner -> platform)
+function viewRequest(){
+  const lowest = STATE.owner && (STATE.owner.plan==='trial'||STATE.owner.plan==='starter');
+  setTimeout(()=>{ const f=$('frForm'); if(f)f.addEventListener('submit',sendFeature); },0);
+  if(lowest) return card('<h3 class="font-bold mb-2">Request a Feature</h3><p class="text-sm text-slate-500">Custom feature requests are available on <b>Growth</b> and <b>Enterprise</b> plans. Upgrade to request new features for free (until high complexity).</p><button onclick="switchTab(\\'plan\\')" class="mt-3 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Upgrade Plan</button>');
+  return card('<h3 class="font-bold mb-1">Request a Feature</h3><p class="text-sm text-slate-500 mb-3">Need something custom? Tell us — we build most requests free (until high complexity). Our team will reach out from <b>care@nuvellestudio.store</b>.</p>'+
+    '<form id="frForm" class="space-y-3"><input id="frSub" placeholder="Feature title *" class="w-full border rounded-lg px-3 py-2"><textarea id="frBody" rows="4" placeholder="Describe what you need *" class="w-full border rounded-lg px-3 py-2"></textarea>'+
+    '<input type="file" id="frFile" accept="image/*" class="text-sm"><span id="frInfo" class="text-xs text-slate-400 block"></span>'+
+    '<button class="bg-indigo-600 text-white font-bold px-5 py-2.5 rounded-lg">Send Request</button> <span id="frMsg" class="text-sm ml-2"></span></form>');
+}
+let FRATT=null;
+function frAttachInit(){ const f=$('frFile'); if(f) f.onchange=()=>{ const file=f.files[0]; if(!file)return; if(file.size>800*1024){ toast('Max 800KB',true); f.value=''; return; } const r=new FileReader(); r.onload=()=>{ FRATT=r.result; $('frInfo').textContent='Attached: '+file.name; }; r.readAsDataURL(file); }; }
+async function sendFeature(e){ e.preventDefault(); const m=$('frMsg'); m.textContent='Sending...'; m.className='text-sm ml-2';
+  const {data}=await axios.post('/api/owner/feature-request',{subject:$('frSub').value,body:$('frBody').value,attach_url:FRATT||''},{headers:authHeaders()});
+  if(data.ok){ m.textContent='✓ '+data.message; m.className='text-sm ml-2 text-green-600'; $('frForm').reset(); FRATT=null; $('frInfo').textContent=''; }
+  else { m.textContent=data.error||'Failed'; m.className='text-sm ml-2 text-red-500'; }
 }
 
 // COUPONS
@@ -304,16 +456,45 @@ async function addCoupon(e){ e.preventDefault(); await axios.post('/api/owner/co
 async function delCoupon(id){ await axios.delete('/api/owner/coupons/'+id,{headers:authHeaders()}); await reload(); switchTab('coupons'); }
 
 // PAYMENTS
+const GATEWAYS=[
+  {key:'',label:'— None / manual only —'},
+  {key:'razorpay',label:'Razorpay (seamless popup)'},
+  {key:'payu',label:'PayU'},
+  {key:'cashfree',label:'Cashfree'},
+  {key:'phonepe',label:'PhonePe'},
+];
+function gatewayHelp(p){
+  const map={
+    razorpay:'Key ID = "Key Id" (rzp_live_...), Secret = "Key Secret" from Razorpay → Settings → API Keys.',
+    payu:'Key ID = Merchant Key, Secret = Merchant Salt from PayU dashboard.',
+    cashfree:'Key ID = App ID, Secret = Secret Key from Cashfree → Developers → API Keys (Production).',
+    phonepe:'Key ID = Merchant ID, Secret = Salt Key, Extra = Salt Index (usually 1).'
+  };
+  return map[p]||'Select a gateway to take real online payments from customers at checkout.';
+}
 function viewPayments(){
   const s=STATE.store; const f=(v)=>v||'';
-  return card(\`<p class="text-slate-500 text-sm mb-4">Set up how customers pay you. Add any/all methods — they'll appear at checkout.</p>
+  setTimeout(()=>{ const sel=$('paySel'); if(sel) sel.addEventListener('change',()=>{ $('payHelp').textContent=gatewayHelp(sel.value); $('phExtra').style.display=sel.value==='phonepe'?'block':'none'; }); },0);
+  return card(\`<h3 class="font-bold mb-1">Online Payment Gateway</h3>
+  <p class="text-slate-500 text-sm mb-3">Connect your own gateway so customers pay you <b>directly & seamlessly</b> at checkout (any amount). Keys are stored securely and never shown publicly.</p>
+  <form id="gwForm" class="grid md:grid-cols-2 gap-4 mb-2">
+    <div><label class="text-sm font-medium">Gateway Provider</label><select id="paySel" name="pay_provider" class="w-full border rounded-lg px-3 py-2 mt-1">\${GATEWAYS.map(g=>'<option value="'+g.key+'" '+(s.pay_provider===g.key?'selected':'')+'>'+g.label+'</option>').join('')}</select></div>
+    <div><label class="text-sm font-medium">Key ID / Merchant Key</label><input name="pay_key_id" value="\${f(s.pay_key_id)}" class="w-full border rounded-lg px-3 py-2 mt-1" autocomplete="off"></div>
+    <div><label class="text-sm font-medium">Secret / Salt Key</label><input name="pay_key_secret" type="password" value="\${f(s.pay_key_secret)}" class="w-full border rounded-lg px-3 py-2 mt-1" autocomplete="off"></div>
+    <div id="phExtra" style="display:\${s.pay_provider==='phonepe'?'block':'none'}"><label class="text-sm font-medium">Salt Index (PhonePe)</label><input name="pay_extra" value="\${f(s.pay_extra)}" placeholder="1" class="w-full border rounded-lg px-3 py-2 mt-1"></div>
+    <p id="payHelp" class="md:col-span-2 text-xs text-slate-500 bg-slate-50 rounded-lg p-2">\${gatewayHelp(s.pay_provider)}</p>
+    <div class="md:col-span-2"><button class="bg-indigo-600 text-white font-bold px-6 py-2.5 rounded-lg hover:bg-indigo-700">Save Gateway</button> <span id="gwMsg" class="text-sm ml-2"></span></div>
+  </form>
+  <hr class="my-5">
+  <h3 class="font-bold mb-1">Manual Payment Methods</h3>
+  <p class="text-slate-500 text-sm mb-3">Optional. These also show at checkout for customers who prefer UPI / bank transfer.</p>
   <form id="payForm" class="grid md:grid-cols-2 gap-4">
     <div><label class="text-sm font-medium">UPI ID</label><input name="pay_upi" value="\${f(s.pay_upi)}" placeholder="yourname@upi" class="w-full border rounded-lg px-3 py-2 mt-1"></div>
-    <div><label class="text-sm font-medium">Payment QR Code Image URL</label><input name="pay_qr_url" value="\${f(s.pay_qr_url)}" placeholder="https://..." class="w-full border rounded-lg px-3 py-2 mt-1"></div>
+    <div><label class="text-sm font-medium">Payment QR Code Image</label>\${imgField('pay_qr_url',s.pay_qr_url)}</div>
     <div class="md:col-span-2"><label class="text-sm font-medium">Bank Details</label><textarea name="pay_bank" rows="2" placeholder="Account name, number, IFSC..." class="w-full border rounded-lg px-3 py-2 mt-1">\${f(s.pay_bank)}</textarea></div>
-    <div class="md:col-span-2"><label class="text-sm font-medium">Payment Link (Razorpay/PayU/Paytm link)</label><input name="pay_link" value="\${f(s.pay_link)}" placeholder="https://..." class="w-full border rounded-lg px-3 py-2 mt-1"></div>
-    <div class="md:col-span-2"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="pay_gateway_enabled" \${s.pay_gateway_enabled?'checked':''}> Enable online payment gateway button</label></div>
-    <div class="md:col-span-2"><button class="bg-indigo-600 text-white font-bold px-6 py-2.5 rounded-lg hover:bg-indigo-700">Save Payment Settings</button> <span id="payMsg" class="text-sm ml-2"></span></div>
+    <div class="md:col-span-2"><label class="text-sm font-medium">Payment Link (Paytm/other hosted link)</label><input name="pay_link" value="\${f(s.pay_link)}" placeholder="https://..." class="w-full border rounded-lg px-3 py-2 mt-1"></div>
+    <input type="hidden" name="pay_gateway_enabled" value="1">
+    <div class="md:col-span-2"><button class="bg-indigo-600 text-white font-bold px-6 py-2.5 rounded-lg hover:bg-indigo-700">Save Manual Methods</button> <span id="payMsg" class="text-sm ml-2"></span></div>
   </form>\`);
 }
 
@@ -328,6 +509,7 @@ async function subscribe(plan){
   try{
     const {data}=await axios.post('/api/pay/subscribe',{plan,ownerId:STATE.owner.id,firstname:STATE.owner.name,email:STATE.owner.email,phone:STATE.owner.phone||'9999999999'});
     if(!data.ok){ toast(data.error,true); return; }
+    if(data.mode==='link' && data.url){ window.location.href=data.url; return; }
     const form=document.createElement('form'); form.method='POST'; form.action=data.action;
     for(const k in data.fields){ const i=document.createElement('input'); i.type='hidden'; i.name=k; i.value=data.fields[k]; form.appendChild(i); }
     document.body.appendChild(form); form.submit();
@@ -343,11 +525,12 @@ async function changePin(e){ e.preventDefault(); const np=$('newPin').value; con
 // shared save
 async function saveStore(body){ const {data}=await axios.put('/api/owner/store',body,{headers:authHeaders()}); if(data.ok) STATE.store=data.store; return data; }
 function bindStoreForm(){ const f=$('storeForm'); if(!f)return; f.addEventListener('submit', async e=>{ e.preventDefault(); const fd=new FormData(f); const body={}; for(const [k,v] of fd.entries()) body[k]=v; body.is_published=f.is_published.checked?1:0; const r=await saveStore(body); $('storeMsg').textContent=r.ok?'✓ Saved':'Error'; $('storeMsg').className='text-sm ml-2 '+(r.ok?'text-green-600':'text-red-500'); }); }
-function bindPayForm(){ const f=$('payForm'); if(!f)return; f.addEventListener('submit', async e=>{ e.preventDefault(); const fd=new FormData(f); const body={}; for(const [k,v] of fd.entries()) body[k]=v; body.pay_gateway_enabled=f.pay_gateway_enabled.checked?1:0; const r=await saveStore(body); $('payMsg').textContent=r.ok?'✓ Saved':'Error'; $('payMsg').className='text-sm ml-2 text-green-600'; }); }
+function bindPayForm(){ const f=$('payForm'); if(f){ f.addEventListener('submit', async e=>{ e.preventDefault(); const fd=new FormData(f); const body={}; for(const [k,v] of fd.entries()) body[k]=v; const r=await saveStore(body); $('payMsg').textContent=r.ok?'✓ Saved':'Error'; $('payMsg').className='text-sm ml-2 text-green-600'; }); }
+  const g=$('gwForm'); if(g){ g.addEventListener('submit', async e=>{ e.preventDefault(); const fd=new FormData(g); const body={}; for(const [k,v] of fd.entries()) body[k]=v; const r=await saveStore(body); $('gwMsg').textContent=r.ok?'✓ Gateway saved':'Error'; $('gwMsg').className='text-sm ml-2 text-green-600'; }); } }
 
 // hook form binding into switchTab
 const _switch = switchTab;
-switchTab = function(t){ _switch(t); if(t==='store') bindStoreForm(); if(t==='payments') bindPayForm(); };
+switchTab = function(t){ _switch(t); if(t==='store') bindStoreForm(); if(t==='payments') bindPayForm(); if(t==='request') setTimeout(frAttachInit,30); };
 
 async function reload(){ const {data}=await axios.get('/api/owner/dashboard',{headers:authHeaders()}); if(data.ok){ STATE={owner:data.owner,store:data.store,products:data.products,categories:data.categories,orders:data.orders,enquiries:data.enquiries,coupons:data.coupons}; } }
 

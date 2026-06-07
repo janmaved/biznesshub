@@ -1,16 +1,16 @@
 -- Super admin PIN (changeable by owner)
 INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('super_admin_pin', '2005####');
-INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('platform_name', 'StoreBuilder');
+INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('platform_name', 'Storenest');
 
 -- Demo owner (unlocked free for testing)
 INSERT OR IGNORE INTO owners (id, name, email, phone, pin, plan, plan_status, is_unlocked, trial_ends_at)
-VALUES (1, 'Demo Business', 'demo@storebuilder.app', '9999999999', '1234', 'enterprise', 'active', 1, datetime('now','+7 days'));
+VALUES (1, 'Demo Business', 'demo@storenest.app', '9999999999', '1234', 'enterprise', 'active', 1, datetime('now','+7 days'));
 
 -- Demo store
 INSERT OR IGNORE INTO stores (id, owner_id, slug, name, category, theme, tagline, about, currency, phone, whatsapp, email, address, pay_upi, primary_color, accent_color, seo_title, seo_description, seo_keywords)
 VALUES (1, 1, 'demo', 'Spice Garden Restaurant', 'restaurant', 'aurora',
   'Authentic flavours, delivered fresh', 'We serve the finest multi-cuisine dishes prepared by expert chefs. Dine in, take away or order online.',
-  'INR', '9999999999', '9999999999', 'demo@storebuilder.app', '123 Main Street, Mumbai',
+  'INR', '9999999999', '9999999999', 'demo@storenest.app', '123 Main Street, Mumbai',
   'demo@upi', '#e11d48', '#f59e0b',
   'Spice Garden Restaurant - Order Online', 'Order delicious multi-cuisine food online from Spice Garden. Fast delivery, best prices.', 'restaurant, food delivery, order online, mumbai');
 

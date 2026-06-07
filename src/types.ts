@@ -3,14 +3,20 @@ export type Bindings = {
   // Secrets (set via wrangler secret put or .dev.vars)
   PAYU_KEY?: string;
   PAYU_SALT?: string;
+  PAYU_PAYMENT_LINK?: string; // hosted PayU payment link (u.payu.in/...) for real subscription payments
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
+  RESEND_API_KEY?: string; // optional: forwards support tickets to care@nuvellestudio.store
 };
+
+export const BRAND = 'Storenest';
 
 export interface PlanDef {
   key: string;
   name: string;
   price: number;        // INR
+  mrp?: number;         // strike-through original price for offer display
+  deal?: string;        // deal badge text
   period: string;
   tagline: string;
   features: string[];
@@ -31,29 +37,35 @@ export const PLANS: PlanDef[] = [
   {
     key: 'starter',
     name: 'Starter',
-    price: 250,
+    price: 99,
+    mrp: 499,
     period: 'month',
-    tagline: 'Perfect for new & small businesses',
-    features: ['Online store / menu', 'Order booking', 'Enquiry inbox', '2 premium themes', 'UPI / QR payments', 'Basic SEO', 'Coupons & offers'],
+    tagline: 'Cheapest online store anywhere — start in minutes',
+    deal: '🔥 80% OFF Launch Deal',
+    features: ['Your own online store / menu', 'Free subdomain: yourstore.storenest.app', 'Order booking + enquiry inbox', '2 premium themes', 'UPI / QR payments', 'Basic SEO', 'Coupons & offers'],
     themesAllowed: 2
   },
   {
     key: 'growth',
     name: 'Growth',
-    price: 799,
+    price: 249,
+    mrp: 999,
     period: 'month',
-    tagline: 'For growing medium businesses',
-    features: ['Everything in Starter', 'All premium themes', 'AI live chat support', 'PayU payment gateway', 'Custom branding & logo', 'Advanced SEO', 'Priority support'],
+    tagline: 'Everything to grow — beats apps costing 10x more',
+    deal: '⭐ Most Popular · 75% OFF',
+    features: ['Everything in Starter', 'Connect your OWN custom domain', 'All 21 premium themes', 'AI live chat support', 'Your own payment gateway (Razorpay/PayU/Cashfree/PhonePe)', 'White-label (no Storenest branding)', 'Advanced SEO', 'Priority support', 'Free feature requests'],
     themesAllowed: 99,
     popular: true
   },
   {
     key: 'enterprise',
     name: 'Enterprise / White-Label',
-    price: 1999,
+    price: 599,
+    mrp: 2999,
     period: 'month',
-    tagline: 'For large businesses & resellers',
-    features: ['Everything in Growth', 'Full white-label', 'Custom domain support', 'Remove all branding', 'Unlimited products', 'Dedicated support', 'Hosting flexibility'],
+    tagline: 'For large brands & resellers — unbeatable value',
+    deal: '💎 80% OFF · Limited',
+    features: ['Everything in Growth', 'Custom domain + priority connect', 'Full white-label & reseller rights', 'Unlimited products', 'Dedicated support manager', 'Custom feature builds', 'Hosting flexibility'],
     themesAllowed: 99
   }
 ];
