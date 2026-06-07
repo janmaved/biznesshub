@@ -7,8 +7,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "storenest-production",
-      "database_id": "local-dev-placeholder"
+      "database_name": "storebuilder-production",
+      "database_id": "51f62abc-e5b7-4ada-9b7c-d4eda2af4081"
     }
   ]
 }
