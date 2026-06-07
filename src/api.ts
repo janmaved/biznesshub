@@ -392,6 +392,43 @@ api.post('/store/:slug/customer/login', async (c) => {
   return json(c, { ok: true, customer: { id: cust.id, name: cust.name, email: cust.email }, token: await custToken(cust) })
 })
 
+// Customer auth via Firebase ID token (Email/Password handled on client by Firebase SDK).
+// Verifies the token with Google's secure-token API, then creates/links a local customer
+// record so orders, tickets and history keep working with the existing token system.
+api.post('/store/:slug/customer/firebase', async (c) => {
+  const store = await c.env.DB.prepare('SELECT id FROM stores WHERE slug=?').bind(c.req.param('slug')).first<any>()
+  if (!store) return json(c, { ok: false, error: 'Store not found' }, 404)
+  const b = await c.req.json()
+  const idToken = b.idToken || ''
+  if (!idToken) return json(c, { ok: false, error: 'Missing token' }, 400)
+  // Verify the Firebase ID token via Google's public accounts:lookup endpoint
+  const apiKey = 'AIzaSyCwunFhzHPak1xt-UpAevLr2ynaKeVeERE'
+  let info: any
+  try {
+    const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + apiKey, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken })
+    })
+    info = await r.json()
+  } catch { return json(c, { ok: false, error: 'Auth failed' }, 401) }
+  const u = info?.users?.[0]
+  if (!u || !u.email) return json(c, { ok: false, error: 'Invalid session' }, 401)
+  const email = String(u.email).toLowerCase()
+  const name = b.name || u.displayName || email.split('@')[0]
+  const uid = u.localId || ''
+  // Use the Firebase uid as the stored "password" hash seed → stable per-user token
+  const pw = await sha256('fb:' + uid)
+  let cust = await c.env.DB.prepare('SELECT * FROM customers WHERE store_id=? AND email=?').bind(store.id, email).first<any>()
+  if (!cust) {
+    const r = await c.env.DB.prepare('INSERT INTO customers (store_id,name,email,password,phone) VALUES (?,?,?,?,?)')
+      .bind(store.id, name, email, pw, b.phone || '').run()
+    cust = { id: r.meta.last_row_id, name, email, password: pw, phone: b.phone || '' }
+  } else if (cust.password !== pw) {
+    await c.env.DB.prepare('UPDATE customers SET password=? WHERE id=?').bind(pw, cust.id).run()
+    cust.password = pw
+  }
+  return json(c, { ok: true, customer: { id: cust.id, name: cust.name, email: cust.email }, token: await custToken(cust) })
+})
+
 // Customer: list own orders
 api.get('/store/:slug/customer/orders', async (c) => {
   const cust = await authCustomer(c); if (!cust) return json(c, { ok: false }, 401)
