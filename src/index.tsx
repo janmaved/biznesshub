@@ -7,11 +7,18 @@ import { landingPage } from './pages/landing'
 import { ownerApp } from './pages/owner'
 import { superApp } from './pages/super'
 import { storefrontPage } from './pages/storefront'
+import { ensureBootstrap } from './bootstrap'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
 app.use('/api/*', cors())
 app.use('/static/*', serveStatic({ root: './public' }))
+
+// Auto-create schema + seed on a fresh D1 so the app works right after deploy.
+app.use('*', async (c, next) => {
+  try { if (c.env?.DB) await ensureBootstrap(c.env.DB) } catch { /* non-fatal */ }
+  await next()
+})
 
 // API
 app.route('/api', api)
@@ -43,6 +50,15 @@ app.get('/', async (c) => {
   }
   return c.html(landingPage())
 })
+
+// Favicon (inline SVG) — avoids a noisy 404/500 on every page load.
+app.get('/favicon.ico', (c) =>
+  c.body(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#4f46e5"/><text x="32" y="44" font-size="38" font-family="Arial" font-weight="bold" fill="#fff" text-anchor="middle">S</text></svg>',
+    200,
+    { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }
+  )
+)
 
 // Owner login / signup / dashboard (single SPA shell)
 app.get('/owner', (c) => c.html(ownerApp()))
