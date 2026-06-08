@@ -186,11 +186,28 @@ function renderPricing(){
     </div>\`).join('');
 }
 
+function getOwnerAcct(){ try{ return JSON.parse(localStorage.getItem('sb_owner')||'null'); }catch(e){ return null; } }
 function openBuy(key){
   selectedPlan = META.plans.find(p=>p.key===key);
+  const acct = getOwnerAcct();
+  // Signup-first: you must have an owner account before buying a plan.
+  if(!acct || !acct.id){
+    const m=document.getElementById('buyModal');
+    document.querySelector('#buyModal .bg-white').innerHTML =
+      '<div class="text-center p-2"><div class="w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl mx-auto mb-3"><i class="fas fa-user-plus"></i></div>'+
+      '<h3 class="text-xl font-bold mb-1">Create a free account first</h3>'+
+      '<p class="text-slate-500 text-sm mb-4">To buy the <b>'+selectedPlan.name+'</b> plan you need a Storenest account. Sign up free (no card), then buy the plan from your dashboard \u2192 Plan & Billing.</p>'+
+      '<a href="/owner#signup" class="block w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 mb-2">Create Free Account \u2192</a>'+
+      '<a href="/owner" class="block w-full border border-slate-300 font-semibold py-2.5 rounded-lg hover:bg-slate-50">I already have an account \u2014 Login</a>'+
+      '<button onclick="closeBuy()" class="mt-3 text-sm text-slate-400 hover:text-slate-600">Cancel</button></div>';
+    m.classList.remove('hidden'); m.classList.add('flex'); return;
+  }
   document.getElementById('buyPlanName').textContent = selectedPlan.name;
   document.getElementById('buyAmount').textContent = '₹'+selectedPlan.price;
   document.getElementById('buyMsg').textContent='';
+  var bn=document.getElementById('buyName'); if(bn)bn.value=acct.name||'';
+  var be=document.getElementById('buyEmail'); if(be)be.value=acct.email||'';
+  var bo=document.getElementById('buyOwnerId'); if(bo){bo.value=acct.id; bo.type='hidden';}
   const m=document.getElementById('buyModal'); m.classList.remove('hidden'); m.classList.add('flex');
 }
 function closeBuy(){const m=document.getElementById('buyModal'); m.classList.add('hidden'); m.classList.remove('flex');}

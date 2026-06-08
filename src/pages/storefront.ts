@@ -197,6 +197,11 @@ export function storefrontPage(store: any): string {
     .prod-wrap[data-layout="masonry"] .prod-card:nth-child(3n+1) .prod-media{aspect-ratio:3/4}
     .prod-wrap[data-layout="masonry"] .prod-card:nth-child(3n+2) .prod-media{aspect-ratio:1/1}
     .prod-wrap[data-layout="masonry"] .prod-card:nth-child(3n) .prod-media{aspect-ratio:4/5}
+    /* ===== PRODUCT CARD MEDIA SHAPES (owner choice) ===== */
+    [data-cardshape="circle"] .prod-media{border-radius:50%;aspect-ratio:1/1;width:78%;margin:1rem auto 0}
+    [data-cardshape="rounded"] .prod-media{border-radius:1.4rem;margin:.7rem;width:calc(100% - 1.4rem)}
+    [data-cardshape="blob"] .prod-media{border-radius:42% 58% 63% 37% / 41% 44% 56% 59%;aspect-ratio:1/1;width:82%;margin:1rem auto 0}
+    [data-cardshape="arch"] .prod-media{border-radius:50% 50% 0 0 / 22% 22% 0 0}
     .surface{background:var(--surface)}
     .catbtn{border-radius:999px;transition:.2s;font-weight:600}
     .catbtn.active{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;box-shadow:0 6px 16px -6px var(--primary)}
@@ -230,10 +235,17 @@ export function storefrontPage(store: any): string {
   <!-- COUPONS -->
   <div id="couponBar" class="hidden border-y py-2 text-center text-sm" style="background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3)"></div>
 
+  <!-- PROMO BANNER (owner-configurable) -->
+  ${(store.banner_url || store.banner_text) ? `<section class="max-w-6xl mx-auto px-4 mt-8">
+    <div class="promo-banner" style="position:relative;overflow:hidden;border-radius:var(--radius);${store.banner_url ? `background:linear-gradient(90deg,rgba(0,0,0,.45),rgba(0,0,0,.15)),url('${esc(store.banner_url)}');background-size:cover;background-position:center;min-height:160px;color:#fff` : 'background:linear-gradient(120deg,var(--primary),var(--accent));color:#fff;min-height:120px'};display:flex;align-items:center;justify-content:center;text-align:center;padding:2rem 1.5rem;box-shadow:0 12px 30px -14px rgba(0,0,0,.3)">
+      ${store.banner_text ? `<p class="text-xl md:text-2xl font-extrabold" style="text-shadow:0 2px 12px rgba(0,0,0,.3)">${esc(store.banner_text)}</p>` : ''}
+    </div>
+  </section>` : ''}
+
   <!-- MENU / PRODUCTS -->
   <main class="max-w-6xl mx-auto px-4 py-10">
     <div id="catNav" class="flex gap-2 flex-wrap mb-6"></div>
-    <div id="products" class="prod-wrap" data-layout="${th.layout || 'grid'}" data-ratio="${th.ratio || 'square'}"></div>
+    <div id="products" class="prod-wrap" data-layout="${th.layout || 'grid'}" data-ratio="${th.ratio || 'square'}" data-cardshape="${esc(store.card_shape || 'default')}"></div>
   </main>
 
   <!-- ABOUT -->

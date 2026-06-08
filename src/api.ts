@@ -324,6 +324,32 @@ api.post('/owner/login', async (c) => {
   return json(c, { ok: true, owner: { ...owner, pin: undefined }, store })
 })
 
+// Forgot PIN: generate a temporary PIN, save it, email it (if Resend configured).
+// If email is not configured we return the temp PIN directly so recovery works.
+api.post('/owner/forgot-pin', async (c) => {
+  const { email } = await c.req.json()
+  if (!email) return json(c, { ok: false, error: 'Email required' }, 400)
+  const owner = await c.env.DB.prepare('SELECT id,name FROM owners WHERE email=?').bind(email).first<any>()
+  if (!owner) return json(c, { ok: true, message: 'If that email exists, a reset PIN has been sent.' })
+  const temp = String(Math.floor(100000 + Math.random() * 900000))
+  await c.env.DB.prepare('UPDATE owners SET pin=? WHERE id=?').bind(temp, owner.id).run()
+  if (c.env.RESEND_API_KEY) {
+    try {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${c.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Storenest <care@nuvellestudio.store>', to: [email],
+          subject: 'Your Storenest login PIN reset',
+          text: `Hi ${owner.name || ''},\n\nYour temporary login PIN is: ${temp}\n\nLogin and change it from Security → Change PIN.\n\n— Storenest`
+        })
+      })
+    } catch { /* ignore */ }
+    return json(c, { ok: true, message: 'A reset PIN has been emailed to you. Check your inbox.' })
+  }
+  return json(c, { ok: true, message: `Your temporary login PIN is ${temp}. Login and change it from Security.` })
+})
+
 // ============================================================
 // OWNER DASHBOARD DATA  (ownerId in body for simplicity)
 // ============================================================
@@ -362,7 +388,8 @@ api.put('/owner/store', async (c) => {
   if (!owner) return json(c, { ok: false, error: 'Unauthorized' }, 401)
   const store = await getOwnerStore(c.env.DB, owner.id)
   const b = await c.req.json()
-  const fields = ['name','category','theme','tagline','about','logo_url','logo_shape','cover_url','primary_color','accent_color',
+  const fields = ['name','category','theme','tagline','about','logo_url','logo_shape','card_shape','cover_url','primary_color','accent_color',
+    'banner_url','banner_text','sections',
     'currency','phone','whatsapp','email','address','pay_upi','pay_qr_url','pay_bank','pay_link','pay_gateway_enabled',
     'pay_provider','pay_key_id','pay_key_secret','pay_extra','checkout_fields',
     'white_label','custom_domain','seo_title','seo_description','seo_keywords','is_published']
@@ -451,7 +478,7 @@ api.delete('/owner/coupons/:id', async (c) => {
 })
 
 // ----- Media library (uploads) -----
-const MAX_MEDIA_BYTES = 800 * 1024 // ~800KB data URL cap (D1 friendly)
+const MAX_MEDIA_BYTES = 3 * 1024 * 1024 // ~3MB data URL cap
 api.get('/owner/media', async (c) => {
   const owner = await authOwner(c); if (!owner) return json(c, { ok: false }, 401)
   const store = await getOwnerStore(c.env.DB, owner.id)
