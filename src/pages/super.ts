@@ -71,15 +71,37 @@ function renderDash(){
           <td><span class="capitalize bg-slate-700 px-2 py-1 rounded text-xs">\${o.plan}</span></td>
           <td>\${o.plan_status==='active'?'<span class="text-green-400">●</span> active':'<span class="text-red-400">●</span> '+o.plan_status}</td>
           <td><div class="text-xs">\${o.subdomain?'<span class="text-indigo-300">'+o.subdomain+'.storenest.app</span><br>':''}\${o.custom_domain?'<span class="text-green-300">'+o.custom_domain+'</span><br>':''}<button onclick="openDomain(\${o.id})" class="mt-1 bg-slate-600 hover:bg-slate-500 px-2 py-1 rounded text-xs">\${(o.subdomain||o.custom_domain)?'Edit':'Connect'} domain</button></div></td>
-          <td><button onclick="toggleUnlock(\${o.id},\${o.is_unlocked?0:1})" class="\${o.is_unlocked?'bg-green-600':'bg-slate-600'} px-3 py-1 rounded text-xs font-semibold">\${o.is_unlocked?'✓ Unlocked':'Unlock Free'}</button></td>
+          <td><button onclick="toggleUnlock(\${o.id},\${o.is_unlocked?0:1})" class="\${o.is_unlocked?'bg-green-600':'bg-slate-600'} px-3 py-1 rounded text-xs font-semibold">\${o.is_unlocked?'✓ Unlocked':'Unlock Free'}</button><br><button onclick="openPay(\${o.id})" class="mt-1 bg-emerald-700 hover:bg-emerald-600 px-2 py-1 rounded text-xs">✓ Confirm Payment</button>\${o.plan_expires_at?'<br><span class="text-[10px] text-slate-400">exp: '+(o.plan_expires_at||'').slice(0,10)+'</span>':''}</td>
         </tr>\`).join('')||'<tr><td colspan=7 class="p-6 text-center text-slate-500">No owners yet</td></tr>'}</tbody>
       </table></div>
     </div>
     <p class="text-xs text-slate-500 mt-4">Tip: "Unlock Free" gives an owner full enterprise access at no charge (for your own testing or special deals).</p>
 
     <div class="bg-slate-800 rounded-xl overflow-hidden mt-6">
+      <div class="p-4 border-b border-slate-700 font-bold flex justify-between items-center"><span><i class="fas fa-crown mr-1 text-amber-400"></i> Subscription Plans &amp; Pricing</span><button onclick="savePlans()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-1.5 rounded text-sm font-semibold">Save Plans</button></div>
+      <div id="planBox" class="p-4 grid md:grid-cols-2 gap-4 text-sm">Loading…</div>
+    </div>
+
+    <div class="bg-slate-800 rounded-xl overflow-hidden mt-6">
+      <div class="p-4 border-b border-slate-700 font-bold flex justify-between items-center"><span><i class="fas fa-pen mr-1 text-cyan-400"></i> Website Texts &amp; Branding</span><button onclick="saveSite()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-1.5 rounded text-sm font-semibold">Save Texts</button></div>
+      <div id="siteBox" class="p-4 space-y-3 text-sm">Loading…</div>
+    </div>
+
+    <div class="bg-slate-800 rounded-xl overflow-hidden mt-6">
       <div class="p-4 border-b border-slate-700 font-bold flex justify-between items-center"><span><i class="fas fa-headset mr-1 text-indigo-400"></i> Support Tickets</span><button onclick="loadTickets()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm"><i class="fas fa-rotate"></i> Refresh</button></div>
       <div id="ticketBox" class="p-4 space-y-3 text-sm">Loading…</div>
+    </div>
+  </div>
+  <div id="payModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-sm">
+      <h3 class="font-bold mb-1">Confirm Payment &amp; Activate</h3>
+      <p class="text-xs text-slate-400 mb-3">Use this ONLY after the owner has actually paid (e.g. via your payment link). This activates a monthly plan for 30 days, then it auto-locks.</p>
+      <form id="payForm" class="space-y-3">
+        <input type="hidden" id="payOwner">
+        <select id="payPlan" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2"></select>
+        <div class="flex gap-2"><button class="flex-1 bg-emerald-600 py-2 rounded-lg font-semibold">Activate</button><button type="button" onclick="$('payModal').classList.add('hidden')" class="flex-1 bg-slate-600 py-2 rounded-lg">Cancel</button></div>
+        <p id="payMsg" class="text-sm text-center"></p>
+      </form>
     </div>
   </div>
   <div id="pinModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50">
@@ -129,7 +151,67 @@ function renderDash(){
     if(data.ok){ $('domMsg').textContent='✓ Saved'; $('domMsg').className='text-sm text-center text-green-400'; setTimeout(()=>{$('domModal').classList.add('hidden'); loadDash();},800); }
     else { $('domMsg').textContent=data.error||'Error'; $('domMsg').className='text-sm text-center text-red-400'; }
   });
-  loadTickets();
+  $('payForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const {data}=await axios.post('/api/super/confirm-payment',{pin:PIN,ownerId:$('payOwner').value,plan:$('payPlan').value});
+    if(data.ok){ $('payMsg').textContent='✓ Activated (30 days)'; $('payMsg').className='text-sm text-center text-green-400'; setTimeout(()=>{$('payModal').classList.add('hidden'); loadDash();},800); }
+    else { $('payMsg').textContent=data.error||'Error'; $('payMsg').className='text-sm text-center text-red-400'; }
+  });
+  loadTickets(); loadConfig();
+}
+
+let CONFIG={plans:[],site:{}};
+async function loadConfig(){
+  const {data}=await axios.post('/api/super/config',{pin:PIN});
+  if(!data.ok) return; CONFIG=data; renderPlans(); renderSite();
+}
+function renderPlans(){
+  const box=$('planBox'); if(!box) return;
+  box.innerHTML=CONFIG.plans.map((p,i)=>\`
+    <div class="bg-slate-900/50 rounded-lg p-3 border border-slate-700" data-plan="\${p.key}">
+      <p class="font-bold mb-2 capitalize">\${p.key}\${p.key==='trial'?' (free)':''}</p>
+      <label class="text-xs text-slate-400">Name</label><input class="pl-name w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 mb-2" value="\${(p.name||'').replace(/"/g,'&quot;')}">
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <div><label class="text-xs text-slate-400">Price ₹/mo</label><input type="number" class="pl-price w-full bg-slate-700 border border-slate-600 rounded px-2 py-1" value="\${p.price||0}"></div>
+        <div><label class="text-xs text-slate-400">MRP (strike)</label><input type="number" class="pl-mrp w-full bg-slate-700 border border-slate-600 rounded px-2 py-1" value="\${p.mrp||''}"></div>
+      </div>
+      <label class="text-xs text-slate-400">Deal badge</label><input class="pl-deal w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 mb-2" value="\${(p.deal||'').replace(/"/g,'&quot;')}">
+      <label class="text-xs text-slate-400">Tagline</label><input class="pl-tag w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 mb-2" value="\${(p.tagline||'').replace(/"/g,'&quot;')}">
+      <label class="text-xs text-slate-400">Features (one per line)</label><textarea rows="4" class="pl-feats w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 mb-2">\${(p.features||[]).join('\\n')}</textarea>
+      \${p.key!=='trial'?'<label class="text-xs text-amber-400">Payment link for this plan (PayU/Cashfree/Razorpay)</label><input class="pl-link w-full bg-slate-700 border border-amber-700 rounded px-2 py-1" placeholder="https://..." value="'+((p.payLink||'').replace(/"/g,'&quot;'))+'">':''}
+    </div>\`).join('');
+}
+async function savePlans(){
+  const plans=Array.from(document.querySelectorAll('[data-plan]')).map(d=>({
+    key:d.getAttribute('data-plan'),
+    name:d.querySelector('.pl-name').value,
+    price:Number(d.querySelector('.pl-price').value)||0,
+    mrp:d.querySelector('.pl-mrp').value,
+    deal:d.querySelector('.pl-deal').value,
+    tagline:d.querySelector('.pl-tag').value,
+    features:d.querySelector('.pl-feats').value.split('\\n').map(s=>s.trim()).filter(Boolean),
+    payLink:d.querySelector('.pl-link')?d.querySelector('.pl-link').value:''
+  }));
+  const {data}=await axios.post('/api/super/plans',{pin:PIN,plans});
+  if(data.ok){ CONFIG.plans=data.plans; alert('✓ Plans saved'); } else alert('Error');
+}
+function renderSite(){
+  const s=CONFIG.site||{}; const box=$('siteBox'); if(!box) return;
+  box.innerHTML=\`
+    <div><label class="text-xs text-slate-400">Brand name</label><input id="st_brand" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2" value="\${(s.brand_name||'').replace(/"/g,'&quot;')}"></div>
+    <div><label class="text-xs text-slate-400">Hero title</label><input id="st_ht" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2" value="\${(s.hero_title||'').replace(/"/g,'&quot;')}"></div>
+    <div><label class="text-xs text-slate-400">Hero subtitle</label><textarea id="st_hs" rows="2" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2">\${s.hero_subtitle||''}</textarea></div>
+    <div><label class="text-xs text-slate-400">Support email</label><input id="st_em" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2" value="\${(s.support_email||'').replace(/"/g,'&quot;')}"></div>\`;
+}
+async function saveSite(){
+  const site={brand_name:$('st_brand').value,hero_title:$('st_ht').value,hero_subtitle:$('st_hs').value,support_email:$('st_em').value};
+  const {data}=await axios.post('/api/super/site',{pin:PIN,site});
+  if(data.ok){ CONFIG.site=data.site; alert('✓ Texts saved'); } else alert('Error');
+}
+function openPay(id){
+  $('payOwner').value=id; $('payMsg').textContent='';
+  $('payPlan').innerHTML=CONFIG.plans.filter(p=>p.price>0).map(p=>'<option value="'+p.key+'">'+p.name+' — ₹'+p.price+'/mo</option>').join('');
+  const m=$('payModal'); m.classList.remove('hidden'); m.classList.add('flex');
 }
 function showChangePin(){ const m=$('pinModal'); m.classList.remove('hidden'); m.classList.add('flex'); }
 async function toggleUnlock(id,unlock){ await axios.post('/api/super/unlock',{pin:PIN,ownerId:id,unlock}); await loadDash(); }
