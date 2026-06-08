@@ -15,6 +15,61 @@ async function getSuperPin(db: D1Database): Promise<string> {
   return row?.value || '2005####'
 }
 
+// ---- Platform settings (key/value) ----
+async function getSetting(db: D1Database, key: string): Promise<string> {
+  const row = await db.prepare('SELECT value FROM platform_settings WHERE key=?').bind(key).first<any>()
+  return row?.value || ''
+}
+async function setSetting(db: D1Database, key: string, value: string) {
+  await db.prepare('INSERT OR REPLACE INTO platform_settings (key,value) VALUES (?,?)').bind(key, value).run()
+}
+
+// Merge DB-stored plan overrides (price / mrp / deal / features / payLink) onto the defaults.
+async function getPlans(db: D1Database) {
+  const raw = await getSetting(db, 'plan_overrides')
+  let ov: any = {}
+  try { ov = raw ? JSON.parse(raw) : {} } catch { ov = {} }
+  return PLANS.map((p) => {
+    const o = ov[p.key] || {}
+    return {
+      ...p,
+      ...(o.name != null ? { name: o.name } : {}),
+      ...(o.price != null ? { price: Number(o.price) } : {}),
+      ...(o.mrp != null ? { mrp: Number(o.mrp) } : {}),
+      ...(o.deal != null ? { deal: o.deal } : {}),
+      ...(o.tagline != null ? { tagline: o.tagline } : {}),
+      ...(o.period != null ? { period: o.period } : {}),
+      ...(Array.isArray(o.features) && o.features.length ? { features: o.features } : {}),
+      ...(o.payLink != null ? { payLink: o.payLink } : {}),
+    }
+  })
+}
+
+// Editable website / platform texts (landing hero, brand name, support email, etc.).
+const SITE_TEXT_DEFAULTS: Record<string, string> = {
+  brand_name: 'Storenest',
+  hero_title: 'Build Your Online Store & Website in Minutes',
+  hero_subtitle: 'No code. No setup fees. Launch a stunning store, menu or service site — cheaper than any app, ready in minutes.',
+  support_email: 'care@nuvellestudio.store',
+}
+async function getSiteText(db: D1Database) {
+  const raw = await getSetting(db, 'site_text')
+  let ov: any = {}
+  try { ov = raw ? JSON.parse(raw) : {} } catch { ov = {} }
+  return { ...SITE_TEXT_DEFAULTS, ...ov }
+}
+
+// Auto-expire paid (non-trial) plans whose monthly window has passed → lock back to trial.
+async function enforceExpiry(db: D1Database) {
+  try {
+    await db.prepare(
+      `UPDATE owners SET plan='trial', plan_status='expired'
+       WHERE is_unlocked=0 AND plan NOT IN ('trial')
+         AND plan_expires_at IS NOT NULL AND plan_expires_at < datetime('now')`
+    ).run()
+  } catch { /* non-fatal */ }
+}
+
 async function getOwnerStore(db: D1Database, ownerId: number) {
   return await db.prepare('SELECT * FROM stores WHERE owner_id=?').bind(ownerId).first<any>()
 }
@@ -22,7 +77,12 @@ async function getOwnerStore(db: D1Database, ownerId: number) {
 // ============================================================
 // META: plans, themes, categories
 // ============================================================
-api.get('/meta', (c) => json(c, { plans: PLANS, themes: THEMES, categories: CATEGORIES }))
+api.get('/meta', async (c) => {
+  await enforceExpiry(c.env.DB)
+  const plans = await getPlans(c.env.DB)
+  const site = await getSiteText(c.env.DB)
+  return json(c, { plans, themes: THEMES, categories: CATEGORIES, site })
+})
 
 // ============================================================
 // SUPER ADMIN (platform owner)
@@ -79,6 +139,58 @@ api.post('/super/domain', async (c) => {
   await c.env.DB.prepare('UPDATE stores SET custom_domain=?, subdomain=?, domain_status=? WHERE id=?')
     .bind(dom, sub, status || (dom || sub ? 'connected' : 'none'), store.id).run()
   return json(c, { ok: true, custom_domain: dom, subdomain: sub })
+})
+
+// Super admin: read current plan + site-text config for editing
+api.post('/super/config', async (c) => {
+  const { pin } = await c.req.json()
+  if (pin !== (await getSuperPin(c.env.DB))) return json(c, { ok: false, error: 'Unauthorized' }, 401)
+  return json(c, { ok: true, plans: await getPlans(c.env.DB), site: await getSiteText(c.env.DB) })
+})
+
+// Super admin: save plan overrides (price / mrp / deal / features / per-plan payment link)
+api.post('/super/plans', async (c) => {
+  const { pin, plans } = await c.req.json()
+  if (pin !== (await getSuperPin(c.env.DB))) return json(c, { ok: false, error: 'Unauthorized' }, 401)
+  const ov: any = {}
+  for (const p of (plans || [])) {
+    if (!p || !p.key) continue
+    ov[p.key] = {
+      name: p.name, price: Number(p.price) || 0, mrp: p.mrp != null && p.mrp !== '' ? Number(p.mrp) : undefined,
+      deal: p.deal || '', tagline: p.tagline || '', period: p.period || 'month',
+      features: Array.isArray(p.features) ? p.features.filter((x: string) => x && x.trim()) : undefined,
+      payLink: (p.payLink || '').trim(),
+    }
+  }
+  await setSetting(c.env.DB, 'plan_overrides', JSON.stringify(ov))
+  return json(c, { ok: true, plans: await getPlans(c.env.DB) })
+})
+
+// Super admin: save editable website / platform texts
+api.post('/super/site', async (c) => {
+  const { pin, site } = await c.req.json()
+  if (pin !== (await getSuperPin(c.env.DB))) return json(c, { ok: false, error: 'Unauthorized' }, 401)
+  const clean: any = {}
+  for (const k of Object.keys(SITE_TEXT_DEFAULTS)) if (site && site[k] != null) clean[k] = String(site[k])
+  await setSetting(c.env.DB, 'site_text', JSON.stringify(clean))
+  return json(c, { ok: true, site: await getSiteText(c.env.DB) })
+})
+
+// Super admin: STRICT manual confirmation that an owner actually paid (for payment-link mode,
+// where the gateway can't auto-callback). Only this — or a verified gateway callback — unlocks a paid plan.
+api.post('/super/confirm-payment', async (c) => {
+  const { pin, ownerId, plan } = await c.req.json()
+  if (pin !== (await getSuperPin(c.env.DB))) return json(c, { ok: false, error: 'Unauthorized' }, 401)
+  const plans = await getPlans(c.env.DB)
+  const pl = plans.find((p) => p.key === plan)
+  if (!pl || pl.price <= 0) return json(c, { ok: false, error: 'Invalid plan' }, 400)
+  const txnid = 'MANUAL' + Date.now()
+  await c.env.DB.prepare('INSERT INTO subscriptions (owner_id,plan,amount,txn_id,status,gateway) VALUES (?,?,?,?,?,?)')
+    .bind(ownerId, pl.key, pl.price, txnid, 'success', 'manual').run()
+  // Monthly plans expire after 30 days → then auto-locked by enforceExpiry.
+  await c.env.DB.prepare("UPDATE owners SET plan=?, plan_status='active', plan_expires_at=datetime('now','+30 days') WHERE id=?")
+    .bind(pl.key, ownerId).run()
+  return json(c, { ok: true })
 })
 
 // Super admin: view + reply to platform support tickets
@@ -670,16 +782,18 @@ api.post('/store/:slug/chat', async (c) => {
 // ============================================================
 api.post('/pay/subscribe', async (c) => {
   const b = await c.req.json()
-  const plan = PLANS.find((p) => p.key === b.plan)
+  const plans = await getPlans(c.env.DB)
+  const plan = plans.find((p) => p.key === b.plan)
   if (!plan || plan.price <= 0) return json(c, { ok: false, error: 'Invalid plan' }, 400)
   const txnid = 'SUB' + Date.now() + Math.floor(Math.random() * 1000)
   await c.env.DB.prepare('INSERT INTO subscriptions (owner_id,plan,amount,txn_id,status) VALUES (?,?,?,?,?)')
     .bind(b.ownerId || 0, plan.key, plan.price, txnid, 'pending').run()
 
-  // Preferred: hosted PayU payment link (real, working payment page).
-  const link = c.env.PAYU_PAYMENT_LINK
+  // Preferred: per-plan hosted payment link set by super-admin (PayU/Cashfree/Razorpay/etc.).
+  // Falls back to a global PAYU_PAYMENT_LINK env var if no per-plan link is configured.
+  const link = (plan as any).payLink || c.env.PAYU_PAYMENT_LINK
   if (link) {
-    return json(c, { ok: true, mode: 'link', url: link, txnid })
+    return json(c, { ok: true, mode: 'link', url: link, txnid, plan: plan.key, amount: plan.price })
   }
 
   // Fallback: classic PayU hosted form (requires valid live key+salt).

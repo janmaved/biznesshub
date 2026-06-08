@@ -47,8 +47,8 @@ export function landingPage(): string {
   <header class="gradient-hero text-white pt-28 pb-24 px-4">
     <div class="max-w-5xl mx-auto text-center">
       <span class="glass inline-block px-4 py-1 rounded-full text-sm mb-6">🚀 7-Day Free Trial • No card required</span>
-      <h1 class="text-4xl md:text-6xl font-extrabold leading-tight">Your Business Deserves a<br><span class="text-cyan-300">Beautiful Online Store</span></h1>
-      <p class="mt-6 text-lg md:text-xl text-indigo-100 max-w-2xl mx-auto">Build a stunning website with online ordering, payments, AI chat support and custom branding — in minutes. No code. No designer. Better & cheaper than Shopify.</p>
+      <h1 id="heroTitle" class="text-4xl md:text-6xl font-extrabold leading-tight">Your Business Deserves a<br><span class="text-cyan-300">Beautiful Online Store</span></h1>
+      <p id="heroSubtitle" class="mt-6 text-lg md:text-xl text-indigo-100 max-w-2xl mx-auto">Build a stunning website with online ordering, payments, AI chat support and custom branding — in minutes. No code. No designer. Better & cheaper than Shopify.</p>
       <div class="mt-8 flex flex-wrap gap-3 justify-center">
         <a href="/owner#signup" class="px-8 py-4 bg-white text-indigo-700 font-bold rounded-xl shadow-lg hover:scale-105 transition">Start Building Free <i class="fas fa-arrow-right ml-1"></i></a>
         <a href="/s/demo" class="px-8 py-4 glass text-white font-bold rounded-xl hover:bg-white/20">View Live Demo</a>
@@ -221,6 +221,10 @@ if(ps){ const b=document.createElement('div'); b.className='fixed top-20 left-1/
 
 (async ()=>{
   const {data}=await axios.get('/api/meta'); META=data;
+  if(META.site){
+    if(META.site.hero_title){ const e=document.getElementById('heroTitle'); if(e) e.textContent=META.site.hero_title; }
+    if(META.site.hero_subtitle){ const e=document.getElementById('heroSubtitle'); if(e) e.textContent=META.site.hero_subtitle; }
+  }
   renderFeatures(); renderThemes(); renderPricing();
 })();
 

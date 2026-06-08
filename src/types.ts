@@ -22,6 +22,7 @@ export interface PlanDef {
   features: string[];
   themesAllowed: number;
   popular?: boolean;
+  payLink?: string;     // per-plan hosted payment link (PayU/Cashfree/Razorpay/etc.)
 }
 
 export const PLANS: PlanDef[] = [
