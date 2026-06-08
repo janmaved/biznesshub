@@ -108,7 +108,7 @@ api.post('/super/owners', async (c) => {
   const real = await getSuperPin(c.env.DB)
   if (pin !== real) return json(c, { ok: false, error: 'Unauthorized' }, 401)
   const owners = await c.env.DB.prepare(`
-    SELECT o.*, s.name as store_name, s.slug as store_slug, s.custom_domain as custom_domain, s.subdomain as subdomain
+    SELECT o.*, s.name as store_name, s.slug as store_slug, s.custom_domain as custom_domain, s.subdomain as subdomain, s.domain_status as domain_status
     FROM owners o LEFT JOIN stores s ON s.owner_id=o.id ORDER BY o.created_at DESC`).all()
   const subs = await c.env.DB.prepare('SELECT * FROM subscriptions ORDER BY created_at DESC LIMIT 50').all()
   return json(c, { ok: true, owners: owners.results, subscriptions: subs.results })
@@ -136,9 +136,35 @@ api.post('/super/domain', async (c) => {
   const sub = (subdomain || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
   if (dom) { const d = await c.env.DB.prepare('SELECT id FROM stores WHERE custom_domain=? AND id<>?').bind(dom, store.id).first(); if (d) return json(c, { ok: false, error: 'Domain already in use' }, 400) }
   if (sub) { const d = await c.env.DB.prepare('SELECT id FROM stores WHERE subdomain=? AND id<>?').bind(sub, store.id).first(); if (d) return json(c, { ok: false, error: 'Subdomain already in use' }, 400) }
+  // A custom domain is "pending" until DNS is verified to point at this app.
+  const st = status || (dom ? 'pending' : (sub ? 'connected' : 'none'))
   await c.env.DB.prepare('UPDATE stores SET custom_domain=?, subdomain=?, domain_status=? WHERE id=?')
-    .bind(dom, sub, status || (dom || sub ? 'connected' : 'none'), store.id).run()
-  return json(c, { ok: true, custom_domain: dom, subdomain: sub })
+    .bind(dom, sub, st, store.id).run()
+  return json(c, { ok: true, custom_domain: dom, subdomain: sub, domain_status: st })
+})
+
+// Super admin: verify a custom domain is really pointing at this deployment.
+// We fetch the live domain and check it returns this store's storefront
+// (the storefront embeds data-slug). If it matches, mark domain as connected.
+api.post('/super/domain/verify', async (c) => {
+  const { pin, ownerId } = await c.req.json()
+  if (pin !== (await getSuperPin(c.env.DB))) return json(c, { ok: false, error: 'Unauthorized' }, 401)
+  const store = await c.env.DB.prepare('SELECT id, slug, custom_domain FROM stores WHERE owner_id=?').bind(ownerId).first<any>()
+  if (!store || !store.custom_domain) return json(c, { ok: false, error: 'No custom domain set' }, 400)
+  const dom = store.custom_domain
+  let reachable = false, matched = false, detail = ''
+  try {
+    const res = await fetch(`https://${dom}/`, { headers: { 'host': dom }, redirect: 'follow' as any })
+    reachable = res.ok
+    const html = await res.text()
+    matched = html.includes(`data-slug="${store.slug}"`) || html.includes(`/s/${store.slug}`)
+    detail = res.status + (matched ? ' · storefront detected' : ' · reachable but not this store yet')
+  } catch (e: any) {
+    detail = 'DNS not resolving / not reachable yet'
+  }
+  const newStatus = matched ? 'connected' : (reachable ? 'pending' : 'pending')
+  await c.env.DB.prepare('UPDATE stores SET domain_status=? WHERE id=?').bind(newStatus, store.id).run()
+  return json(c, { ok: true, verified: matched, reachable, domain_status: newStatus, detail, domain: dom })
 })
 
 // Super admin: read current plan + site-text config for editing

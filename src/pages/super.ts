@@ -130,10 +130,25 @@ function renderDash(){
         </div>
         <div>
           <label class="text-xs text-slate-400">Custom domain (optional)</label>
-          <input id="domCustom" placeholder="shop.example.com" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2">
-          <p class="text-xs text-slate-500 mt-1">Point the domain's CNAME to your Pages app, then save here.</p>
+          <input id="domCustom" placeholder="www.example.com" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2">
         </div>
-        <div class="flex gap-2"><button class="flex-1 bg-indigo-600 py-2 rounded-lg font-semibold">Save</button><button type="button" onclick="$('domModal').classList.add('hidden')" class="flex-1 bg-slate-600 py-2 rounded-lg">Cancel</button></div>
+        <div id="domSteps" class="hidden text-xs bg-slate-900/60 border border-slate-700 rounded-lg p-3 space-y-2">
+          <p class="font-semibold text-amber-300">Real connect — 2 steps (like Shopify):</p>
+          <p><b>1.</b> In Cloudflare → your Pages project → <b>Custom domains</b> → <b>Set up a domain</b> → enter this domain. Cloudflare issues SSL automatically.</p>
+          <p><b>2.</b> At your domain registrar, add a DNS record:</p>
+          <div class="bg-black/40 rounded p-2 font-mono leading-5">
+            <div>Type: <b>CNAME</b> (apex → use <b>A/ALIAS</b>)</div>
+            <div>Name: <b id="dnsName">www</b></div>
+            <div>Target: <b id="dnsTarget" class="text-green-300">your-app.pages.dev</b></div>
+          </div>
+          <p class="text-slate-400">DNS takes 5–30 min. Then click <b>Verify</b>. Once verified, the owner's store opens on this domain and every change auto-applies.</p>
+          <p>Status: <span id="domStatus" class="font-semibold">—</span></p>
+        </div>
+        <div class="flex gap-2">
+          <button class="flex-1 bg-indigo-600 py-2 rounded-lg font-semibold">Save</button>
+          <button type="button" id="domVerifyBtn" onclick="verifyDomain()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 py-2 rounded-lg font-semibold">Verify</button>
+          <button type="button" onclick="$('domModal').classList.add('hidden')" class="px-4 bg-slate-600 py-2 rounded-lg">Close</button>
+        </div>
         <p id="domMsg" class="text-sm text-center"></p>
       </form>
     </div>
@@ -148,7 +163,10 @@ function renderDash(){
     e.preventDefault();
     const ownerId=$('domOwner').value, subdomain=$('domSub').value.trim(), customDomain=$('domCustom').value.trim();
     const {data}=await axios.post('/api/super/domain',{pin:PIN,ownerId,subdomain,customDomain});
-    if(data.ok){ $('domMsg').textContent='✓ Saved'; $('domMsg').className='text-sm text-center text-green-400'; setTimeout(()=>{$('domModal').classList.add('hidden'); loadDash();},800); }
+    if(data.ok){
+      if(customDomain){ $('domMsg').textContent='✓ Saved. Now add the DNS record below, then click Verify.'; $('domMsg').className='text-sm text-center text-green-400'; domRenderSteps(data.custom_domain, data.domain_status); loadDash(); }
+      else { $('domMsg').textContent='✓ Saved'; $('domMsg').className='text-sm text-center text-green-400'; setTimeout(()=>{$('domModal').classList.add('hidden'); loadDash();},800); }
+    }
     else { $('domMsg').textContent=data.error||'Error'; $('domMsg').className='text-sm text-center text-red-400'; }
   });
   $('payForm').addEventListener('submit', async e=>{
@@ -221,7 +239,28 @@ function openDomain(id){
   const o=DATA.owners.find(x=>x.id===id)||{};
   $('domOwner').value=id; $('domSub').value=o.subdomain||''; $('domCustom').value=o.custom_domain||'';
   $('domSubPrev').textContent=(o.subdomain||'yourstore'); $('domMsg').textContent='';
+  domRenderSteps(o.custom_domain||'', o.domain_status||'');
   const m=$('domModal'); m.classList.remove('hidden'); m.classList.add('flex');
+}
+function domRenderSteps(dom, status){
+  const steps=$('domSteps'); if(!steps) return;
+  if(!dom){ steps.classList.add('hidden'); return; }
+  steps.classList.remove('hidden');
+  dom=dom.toLowerCase().replace(/^https?:\\/\\//,'').replace(/\\/.*$/,'');
+  const isApex = dom.split('.').length<=2;
+  $('dnsName').textContent = isApex ? '@' : dom.split('.')[0];
+  $('dnsTarget').textContent = location.host;
+  const map={connected:'✅ Connected & live',pending:'⏳ Pending DNS — click Verify',none:'—'};
+  $('domStatus').textContent = map[status]||'⏳ Pending — click Verify';
+  $('domStatus').className='font-semibold '+(status==='connected'?'text-green-400':'text-amber-300');
+}
+async function verifyDomain(){
+  const ownerId=$('domOwner').value, dom=$('domCustom').value.trim();
+  if(!dom){ $('domMsg').textContent='Enter a custom domain & Save first'; $('domMsg').className='text-sm text-center text-amber-400'; return; }
+  $('domMsg').textContent='Checking DNS…'; $('domMsg').className='text-sm text-center text-slate-300';
+  const {data}=await axios.post('/api/super/domain/verify',{pin:PIN,ownerId});
+  if(data.ok && data.verified){ $('domMsg').textContent='✅ Verified! Store is live at '+data.domain; $('domMsg').className='text-sm text-center text-green-400'; domRenderSteps(dom,'connected'); loadDash(); }
+  else { $('domMsg').textContent='⏳ '+(data.detail||'Not connected yet')+'. DNS may still be propagating — try again in a few minutes.'; $('domMsg').className='text-sm text-center text-amber-400'; domRenderSteps(dom,'pending'); }
 }
 async function loadTickets(){
   const box=$('ticketBox'); if(!box) return;

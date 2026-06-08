@@ -33,12 +33,17 @@ function isPlatformHost(host: string): boolean {
   return false
 }
 async function findStoreByHost(c: any, host: string): Promise<any | null> {
-  const h = (host || '').split(':')[0].toLowerCase()
+  const h = (host || '').split(':')[0].toLowerCase().replace(/\.$/, '')
+  // Match both apex (example.com) and www (www.example.com) for custom domains.
+  const bare = h.replace(/^www\./, '')
+  const wwwed = 'www.' + bare
   const sub = h.endsWith('.storenest.app') ? h.replace('.storenest.app', '') : ''
+  // Match the saved custom_domain whether the visitor used apex or www, and
+  // whether the owner saved it with or without the www prefix.
   return await c.env.DB.prepare(
     `SELECT s.*, o.plan AS owner_plan FROM stores s LEFT JOIN owners o ON o.id = s.owner_id
-     WHERE s.is_published=1 AND (s.custom_domain=? OR (?<>'' AND s.subdomain=?)) LIMIT 1`
-  ).bind(h, sub, sub).first<any>()
+     WHERE s.is_published=1 AND (s.custom_domain=? OR s.custom_domain=? OR s.custom_domain=? OR (?<>'' AND s.subdomain=?)) LIMIT 1`
+  ).bind(h, bare, wwwed, sub, sub).first<any>()
 }
 
 // Root: tenant storefront on custom domain / subdomain, else SaaS landing.
