@@ -77,6 +77,9 @@ const ALTERS: string[] = [
 const SEED: string[] = [
   `INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('super_admin_pin', '2005####')`,
   `INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('platform_name', 'Storenest')`,
+  // PayU live merchant credentials (INSERT OR IGNORE so super-admin edits persist).
+  `INSERT OR IGNORE INTO platform_settings (key, value) VALUES ('payu_key', 'WxDaR0')`,
+  `INSERT OR IGNORE INTO platform_settings (key, value) VALUES ('payu_salt', 'MHDpyn7llm4UwyBxCiyO4xBOspqyVIoj')`,
   `INSERT OR IGNORE INTO owners (id, name, email, phone, pin, plan, plan_status, is_unlocked, trial_ends_at)
      VALUES (1, 'Demo Business', 'demo@storenest.app', '9999999999', '1234', 'enterprise', 'active', 1, datetime('now','+7 days'))`,
   `INSERT OR IGNORE INTO stores (id, owner_id, slug, name, category, theme, tagline, about, currency, phone, whatsapp, email, address, pay_upi, primary_color, accent_color, seo_title, seo_description, seo_keywords)
@@ -99,7 +102,14 @@ export async function ensureBootstrap(db: D1Database): Promise<void> {
   try {
     // Fast path: if the super_admin_pin row exists, schema+seed are already in place.
     const ok = await db.prepare("SELECT value FROM platform_settings WHERE key='super_admin_pin'").first().catch(() => null)
-    if (ok) { bootstrapped = true; return }
+    if (ok) {
+      // Still ensure PayU credentials exist for DBs created before this build.
+      try {
+        await db.prepare("INSERT OR IGNORE INTO platform_settings (key,value) VALUES ('payu_key','WxDaR0')").run()
+        await db.prepare("INSERT OR IGNORE INTO platform_settings (key,value) VALUES ('payu_salt','MHDpyn7llm4UwyBxCiyO4xBOspqyVIoj')").run()
+      } catch { /* ignore */ }
+      bootstrapped = true; return
+    }
   } catch { /* table doesn't exist yet — fall through to create */ }
 
   for (const sql of SCHEMA) { try { await db.prepare(sql).run() } catch { /* ignore */ } }

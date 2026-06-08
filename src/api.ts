@@ -23,6 +23,12 @@ async function getSetting(db: D1Database, key: string): Promise<string> {
 async function setSetting(db: D1Database, key: string, value: string) {
   await db.prepare('INSERT OR REPLACE INTO platform_settings (key,value) VALUES (?,?)').bind(key, value).run()
 }
+// PayU credentials: env binding wins, else DB-stored setting (seeded in bootstrap).
+async function getPayuCreds(c: any): Promise<{ key: string; salt: string }> {
+  const key = c.env.PAYU_KEY || (await getSetting(c.env.DB, 'payu_key'))
+  const salt = c.env.PAYU_SALT || (await getSetting(c.env.DB, 'payu_salt'))
+  return { key, salt }
+}
 
 // Merge DB-stored plan overrides (price / mrp / deal / features / payLink) onto the defaults.
 async function getPlans(db: D1Database) {
@@ -815,33 +821,35 @@ api.post('/pay/subscribe', async (c) => {
   await c.env.DB.prepare('INSERT INTO subscriptions (owner_id,plan,amount,txn_id,status) VALUES (?,?,?,?,?)')
     .bind(b.ownerId || 0, plan.key, plan.price, txnid, 'pending').run()
 
-  // Preferred: per-plan hosted payment link set by super-admin (PayU/Cashfree/Razorpay/etc.).
-  // Falls back to a global PAYU_PAYMENT_LINK env var if no per-plan link is configured.
+  // Preferred: real PayU hosted form using merchant key+salt. This gives a
+  // verifiable success callback (hash-checked) so we only unlock on real payment.
+  const { key, salt } = await getPayuCreds(c)
+  if (key && salt) {
+    const origin0 = new URL(c.req.url).origin
+    const req0 = await buildPayuRequest({
+      key, salt, txnid,
+      amount: String(plan.price),
+      productinfo: `${plan.name} Plan Subscription`,
+      firstname: b.firstname || 'Customer',
+      email: b.email || 'customer@example.com',
+      phone: b.phone || '9999999999',
+      surl: `${origin0}/api/pay/callback?type=success`,
+      furl: `${origin0}/api/pay/callback?type=failure`,
+      test: false
+    })
+    return json(c, { ok: true, mode: 'form', ...req0, txnid })
+  }
+
+  // Fallback: per-plan hosted payment link set by super-admin (if no key/salt).
   const link = (plan as any).payLink || c.env.PAYU_PAYMENT_LINK
   if (link) {
     return json(c, { ok: true, mode: 'link', url: link, txnid, plan: plan.key, amount: plan.price })
   }
-
-  // Fallback: classic PayU hosted form (requires valid live key+salt).
-  const key = c.env.PAYU_KEY, salt = c.env.PAYU_SALT
-  if (!key || !salt) return json(c, { ok: false, error: 'Payment not configured' }, 503)
-  const origin = new URL(c.req.url).origin
-  const req = await buildPayuRequest({
-    key, salt, txnid,
-    amount: String(plan.price),
-    productinfo: `${plan.name} Plan Subscription`,
-    firstname: b.firstname || 'Customer',
-    email: b.email || 'customer@example.com',
-    phone: b.phone || '9999999999',
-    surl: `${origin}/api/pay/callback?type=success`,
-    furl: `${origin}/api/pay/callback?type=failure`,
-    test: false
-  })
-  return json(c, { ok: true, mode: 'form', ...req, txnid })
+  return json(c, { ok: false, error: 'Payment not configured' }, 503)
 })
 
 api.post('/pay/callback', async (c) => {
-  const salt = c.env.PAYU_SALT || ''
+  const { salt } = await getPayuCreds(c)
   const form = await c.req.parseBody()
   const params: Record<string, string> = {}
   for (const k in form) params[k] = String(form[k])

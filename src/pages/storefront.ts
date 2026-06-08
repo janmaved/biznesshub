@@ -144,6 +144,59 @@ export function storefrontPage(store: any): string {
     .prod-card img{transition:transform .4s ease}
     .prod-card:hover{transform:translateY(-6px);${th.cardStyle === 'border' ? 'border-color:var(--primary);' : ''}box-shadow:0 22px 44px -16px ${dark ? 'rgba(0,0,0,.6)' : 'color-mix(in srgb,var(--primary) 40%,rgba(0,0,0,.18))'}}
     .prod-card:hover img{transform:scale(1.06)}
+    .prod-card{display:flex;flex-direction:column}
+    .prod-card .pc-body{padding:1rem;display:flex;flex-direction:column;flex:1}
+    /* media aspect ratios per theme */
+    .prod-media{width:100%;overflow:hidden;background:rgba(120,120,120,.08);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.8rem}
+    .prod-media img{width:100%;height:100%;object-fit:cover}
+    [data-ratio="square"] .prod-media{aspect-ratio:1/1}
+    [data-ratio="portrait"] .prod-media{aspect-ratio:3/4}
+    [data-ratio="landscape"] .prod-media{aspect-ratio:4/3}
+    [data-ratio="wide"] .prod-media{aspect-ratio:16/9}
+
+    /* ===== LAYOUT: GRID (classic 3-col) ===== */
+    .prod-wrap[data-layout="grid"]{display:grid;grid-template-columns:repeat(1,1fr);gap:1.25rem}
+    @media(min-width:640px){.prod-wrap[data-layout="grid"]{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:1024px){.prod-wrap[data-layout="grid"]{grid-template-columns:repeat(3,1fr)}}
+
+    /* ===== LAYOUT: COMPACT (denser 4-col tiles) ===== */
+    .prod-wrap[data-layout="compact"]{display:grid;grid-template-columns:repeat(2,1fr);gap:.9rem}
+    @media(min-width:768px){.prod-wrap[data-layout="compact"]{grid-template-columns:repeat(3,1fr)}}
+    @media(min-width:1100px){.prod-wrap[data-layout="compact"]{grid-template-columns:repeat(4,1fr)}}
+    .prod-wrap[data-layout="compact"] .pc-body{padding:.7rem}
+    .prod-wrap[data-layout="compact"] h3{font-size:.95rem}
+
+    /* ===== LAYOUT: SHOWCASE (big 2-col cards, gallery feel) ===== */
+    .prod-wrap[data-layout="showcase"]{display:grid;grid-template-columns:repeat(1,1fr);gap:1.6rem}
+    @media(min-width:768px){.prod-wrap[data-layout="showcase"]{grid-template-columns:repeat(2,1fr)}}
+    .prod-wrap[data-layout="showcase"] .pc-body{padding:1.4rem}
+    .prod-wrap[data-layout="showcase"] h3{font-size:1.3rem}
+
+    /* ===== LAYOUT: LIST (horizontal rows, menu/services style) ===== */
+    .prod-wrap[data-layout="list"]{display:flex;flex-direction:column;gap:1rem}
+    .prod-wrap[data-layout="list"] .prod-card{flex-direction:row;align-items:stretch}
+    .prod-wrap[data-layout="list"] .prod-media{width:38%;max-width:220px;flex-shrink:0;aspect-ratio:auto}
+    @media(max-width:520px){.prod-wrap[data-layout="list"] .prod-media{width:42%}}
+    .prod-wrap[data-layout="list"] .pc-body{justify-content:center}
+
+    /* ===== LAYOUT: MAGAZINE (first item featured/large) ===== */
+    .prod-wrap[data-layout="magazine"]{display:grid;grid-template-columns:repeat(2,1fr);gap:1.25rem}
+    @media(min-width:1024px){.prod-wrap[data-layout="magazine"]{grid-template-columns:repeat(3,1fr)}}
+    .prod-wrap[data-layout="magazine"] .prod-card:first-child{grid-column:1/-1}
+    @media(min-width:1024px){.prod-wrap[data-layout="magazine"] .prod-card:first-child{grid-column:span 2;grid-row:span 2;flex-direction:row}}
+    .prod-wrap[data-layout="magazine"] .prod-card:first-child .prod-media{aspect-ratio:16/10}
+    @media(min-width:1024px){.prod-wrap[data-layout="magazine"] .prod-card:first-child .prod-media{width:55%;aspect-ratio:auto}}
+    .prod-wrap[data-layout="magazine"] .prod-card:first-child h3{font-size:1.5rem}
+
+    /* ===== LAYOUT: MASONRY (Pinterest-style staggered columns) ===== */
+    .prod-wrap[data-layout="masonry"]{column-count:1;column-gap:1.1rem}
+    @media(min-width:640px){.prod-wrap[data-layout="masonry"]{column-count:2}}
+    @media(min-width:1024px){.prod-wrap[data-layout="masonry"]{column-count:3}}
+    .prod-wrap[data-layout="masonry"] .prod-card{display:inline-block;width:100%;margin-bottom:1.1rem;break-inside:avoid}
+    .prod-wrap[data-layout="masonry"] .prod-media{aspect-ratio:auto}
+    .prod-wrap[data-layout="masonry"] .prod-card:nth-child(3n+1) .prod-media{aspect-ratio:3/4}
+    .prod-wrap[data-layout="masonry"] .prod-card:nth-child(3n+2) .prod-media{aspect-ratio:1/1}
+    .prod-wrap[data-layout="masonry"] .prod-card:nth-child(3n) .prod-media{aspect-ratio:4/5}
     .surface{background:var(--surface)}
     .catbtn{border-radius:999px;transition:.2s;font-weight:600}
     .catbtn.active{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;box-shadow:0 6px 16px -6px var(--primary)}
@@ -180,7 +233,7 @@ export function storefrontPage(store: any): string {
   <!-- MENU / PRODUCTS -->
   <main class="max-w-6xl mx-auto px-4 py-10">
     <div id="catNav" class="flex gap-2 flex-wrap mb-6"></div>
-    <div id="products" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+    <div id="products" class="prod-wrap" data-layout="${th.layout || 'grid'}" data-ratio="${th.ratio || 'square'}"></div>
   </main>
 
   <!-- ABOUT -->
@@ -282,7 +335,7 @@ function filterCat(id){ activeCat=id; renderCats(); renderProducts(); }
 function renderProducts(){
   const list=activeCat==='all'?PRODUCTS:PRODUCTS.filter(p=>p.category_id==activeCat);
   const el=document.getElementById('products');
-  if(!list.length){ el.innerHTML='<p class="col-span-full text-center py-10" style="color:var(--muted)">No items available yet.</p>'; return; }
+  if(!list.length){ el.innerHTML='<p style="grid-column:1/-1;text-align:center;padding:2.5rem 0;color:var(--muted)">No items available yet.</p>'; return; }
   el.innerHTML=list.map(p=>{
     const price=p.sale_price||p.price;
     let feats=[]; try{ feats=JSON.parse(p.features||'[]'); }catch(e){}
@@ -290,12 +343,12 @@ function renderProducts(){
     const featHtml=(feats&&feats.length)?'<ul class="text-xs mt-2 space-y-0.5" style="color:var(--muted)">'+feats.map(f=>'<li><i class="fas fa-check text-green-500 mr-1"></i>'+esc(f)+'</li>').join('')+'</ul>':'';
     const addonHtml=(addons&&addons.length)?'<div class="mt-2 border-t pt-2"><p class="text-xs font-semibold mb-1" style="color:var(--muted)">Add extras:</p><div class="flex flex-wrap gap-1">'+addons.map((a,i)=>'<button type="button" data-pa="'+p.id+'_'+i+'" onclick="toggleAddon('+p.id+','+i+',this)" class="addon-chip text-xs border rounded-full px-2 py-1">'+esc(a.name)+' +'+CUR+a.price+'</button>').join('')+'</div></div>':'';
     const stock=(p.in_stock===0||p.in_stock===false);
-    return '<div class="prod-card overflow-hidden">'+
-      (p.image_url?'<img src="'+p.image_url+'" class="w-full h-44 object-cover">':'<div class="w-full h-44 flex items-center justify-center text-3xl" style="background:rgba(120,120,120,.08);color:var(--muted)"><i class="fas fa-image"></i></div>')+
-      '<div class="p-4"><div class="flex justify-between items-start"><h3 class="font-bold">'+esc(p.name)+'</h3>'+(p.is_featured?'<span class="text-amber-500 text-xs">★ Popular</span>':'')+'</div>'+
+    const media='<div class="prod-media">'+(p.image_url?'<img src="'+p.image_url+'" alt="'+esc(p.name)+'">':'<i class="fas fa-image"></i>')+'</div>';
+    return '<div class="prod-card">'+media+
+      '<div class="pc-body"><div class="flex justify-between items-start gap-2"><h3 class="font-bold">'+esc(p.name)+'</h3>'+(p.is_featured?'<span class="text-amber-500 text-xs whitespace-nowrap">★ Popular</span>':'')+'</div>'+
       (p.description?'<p class="text-sm mt-1" style="color:var(--muted)">'+esc(p.description)+'</p>':'')+
       featHtml+addonHtml+
-      '<div class="flex justify-between items-center mt-3"><div>'+(p.sale_price?'<span class="line-through text-sm mr-1" style="color:var(--muted)">'+CUR+' '+p.price+'</span>':'')+'<span class="font-bold text-primary">'+CUR+' '+price+'</span></div>'+
+      '<div class="flex justify-between items-center mt-3 pt-1"><div>'+(p.sale_price?'<span class="line-through text-sm mr-1" style="color:var(--muted)">'+CUR+' '+p.price+'</span>':'')+'<span class="font-bold text-primary">'+CUR+' '+price+'</span></div>'+
       (stock?'<span class="text-xs text-red-500 font-semibold">Out of stock</span>':'<button onclick="addCart('+p.id+')" class="btn-primary text-sm font-semibold px-3 py-1.5">'+LBL.add+'</button>')+'</div></div></div>';
   }).join('');
 }
