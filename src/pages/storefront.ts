@@ -245,18 +245,46 @@ function renderProducts(){
   if(!list.length){ el.innerHTML='<p class="col-span-full text-center py-10" style="color:var(--muted)">No items available yet.</p>'; return; }
   el.innerHTML=list.map(p=>{
     const price=p.sale_price||p.price;
+    let feats=[]; try{ feats=JSON.parse(p.features||'[]'); }catch(e){}
+    let addons=[]; try{ addons=JSON.parse(p.addons||'[]'); }catch(e){}
+    const featHtml=(feats&&feats.length)?'<ul class="text-xs mt-2 space-y-0.5" style="color:var(--muted)">'+feats.map(f=>'<li><i class="fas fa-check text-green-500 mr-1"></i>'+esc(f)+'</li>').join('')+'</ul>':'';
+    const addonHtml=(addons&&addons.length)?'<div class="mt-2 border-t pt-2"><p class="text-xs font-semibold mb-1" style="color:var(--muted)">Add extras:</p><div class="flex flex-wrap gap-1">'+addons.map((a,i)=>'<button type="button" data-pa="'+p.id+'_'+i+'" onclick="toggleAddon('+p.id+','+i+',this)" class="addon-chip text-xs border rounded-full px-2 py-1">'+esc(a.name)+' +'+CUR+a.price+'</button>').join('')+'</div></div>':'';
+    const stock=(p.in_stock===0||p.in_stock===false);
     return '<div class="prod-card overflow-hidden">'+
       (p.image_url?'<img src="'+p.image_url+'" class="w-full h-44 object-cover">':'<div class="w-full h-44 flex items-center justify-center text-3xl" style="background:rgba(120,120,120,.08);color:var(--muted)"><i class="fas fa-image"></i></div>')+
       '<div class="p-4"><div class="flex justify-between items-start"><h3 class="font-bold">'+esc(p.name)+'</h3>'+(p.is_featured?'<span class="text-amber-500 text-xs">★ Popular</span>':'')+'</div>'+
       (p.description?'<p class="text-sm mt-1" style="color:var(--muted)">'+esc(p.description)+'</p>':'')+
+      featHtml+addonHtml+
       '<div class="flex justify-between items-center mt-3"><div>'+(p.sale_price?'<span class="line-through text-sm mr-1" style="color:var(--muted)">'+CUR+' '+p.price+'</span>':'')+'<span class="font-bold text-primary">'+CUR+' '+price+'</span></div>'+
-      '<button onclick="addCart('+p.id+')" class="btn-primary text-sm font-semibold px-3 py-1.5">'+LBL.add+'</button></div></div></div>';
+      (stock?'<span class="text-xs text-red-500 font-semibold">Out of stock</span>':'<button onclick="addCart('+p.id+')" class="btn-primary text-sm font-semibold px-3 py-1.5">'+LBL.add+'</button>')+'</div></div></div>';
   }).join('');
+}
+// selected add-ons per product (set of indices)
+window.SEL_ADDONS={};
+function toggleAddon(pid,idx,btn){
+  const k=pid+'_'+idx; SEL_ADDONS[k]=!SEL_ADDONS[k];
+  btn.classList.toggle('btn-primary',SEL_ADDONS[k]);
+  btn.style.opacity=SEL_ADDONS[k]?'1':'';
 }
 function esc(s){return String(s||'').replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]))}
 
 // CART
-function addCart(id){ const p=PRODUCTS.find(x=>x.id===id); const ex=CART.find(c=>c.id===id); if(ex)ex.qty++; else CART.push({id:p.id,name:p.name,price:p.sale_price||p.price,qty:1}); updateCart(); toast(p.name+' added'); }
+function addCart(id){
+  const p=PRODUCTS.find(x=>x.id===id);
+  let addons=[]; try{ addons=JSON.parse(p.addons||'[]'); }catch(e){}
+  const chosen=addons.map((a,i)=>SEL_ADDONS[id+'_'+i]?a:null).filter(Boolean);
+  const addPrice=chosen.reduce((s,a)=>s+(Number(a.price)||0),0);
+  const addNames=chosen.map(a=>a.name).join(', ');
+  const base=p.sale_price||p.price;
+  const lineName=p.name+(addNames?' ('+addNames+')':'');
+  const linePrice=base+addPrice;
+  const ex=CART.find(c=>c.name===lineName && c.price===linePrice);
+  if(ex)ex.qty++; else CART.push({id:p.id,name:lineName,price:linePrice,qty:1});
+  // reset add-on selection for this product
+  addons.forEach((a,i)=>{ delete SEL_ADDONS[id+'_'+i]; });
+  document.querySelectorAll('[data-pa^="'+id+'_"]').forEach(b=>{ b.classList.remove('btn-primary'); b.style.opacity=''; });
+  updateCart(); toast(lineName+' added');
+}
 function updateCart(){ document.getElementById('cartCount').textContent=CART.reduce((s,c)=>s+c.qty,0); renderCart(); }
 function renderCart(){
   const el=document.getElementById('cartItems');
