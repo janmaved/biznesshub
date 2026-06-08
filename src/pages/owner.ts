@@ -53,7 +53,16 @@ function loginForm(){ return \`
     <input id="liEmail" type="email" placeholder="Email" class="w-full border rounded-lg px-3 py-2.5" required>
     <input id="liPin" type="password" placeholder="PIN" class="w-full border rounded-lg px-3 py-2.5" required>
     <button class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700">Login</button>
+    <p class="text-center text-sm"><a href="#" onclick="forgotPin(event)" class="text-indigo-600 hover:underline">Forgot PIN?</a></p>
   </form>\`; }
+async function forgotPin(e){ e.preventDefault();
+  const email=prompt('Enter your account email — we will email you a reset PIN:');
+  if(!email) return;
+  try{ const {data}=await axios.post('/api/owner/forgot-pin',{email});
+    if(data.ok) alert('✓ '+(data.message||'If that email exists, a reset has been sent.'));
+    else alert(data.error||'Could not process');
+  }catch(err){ alert('Could not process right now.'); }
+}
 
 function signupForm(){ return \`
   <form id="signupForm" class="space-y-3">
@@ -185,7 +194,7 @@ function imgField(name,val){
 function setImg(id,val){ $(id).value=val; const p=$(id+'_prev'); p.innerHTML=val?'<img src="'+val+'" class="w-full h-full object-cover">':'<i class="fas fa-image"></i>'; }
 async function uploadImg(ev,id){
   const file=ev.target.files[0]; if(!file)return;
-  if(file.size>800*1024){ toast('File too large (max 800KB). Compress it or use a URL.',true); ev.target.value=''; return; }
+  if(file.size>3*1024*1024){ toast('File too large (max 3MB). Compress it or use a URL.',true); ev.target.value=''; return; }
   const reader=new FileReader();
   reader.onload=async()=>{
     try{
@@ -217,7 +226,7 @@ function mediaGridHtml(){
 function pickMedia(mid){ const m=MEDIA.find(x=>x.id===mid); if(m&&mediaTarget){ setImg(mediaTarget,m.data); const u=$(mediaTarget+'_url'); if(u)u.value=''; } closeLibrary(); }
 async function libUpload(ev){
   const file=ev.target.files[0]; if(!file)return;
-  if(file.size>800*1024){ toast('File too large (max 800KB).',true); return; }
+  if(file.size>3*1024*1024){ toast('File too large (max 3MB).',true); return; }
   const reader=new FileReader();
   reader.onload=async()=>{ const {data}=await axios.post('/api/owner/media',{name:file.name,data:reader.result},{headers:authHeaders()}); if(data.ok){ MEDIA.unshift({id:data.id,kind:data.kind,data:data.data}); $('mediaGrid').innerHTML=mediaGridHtml(); toast('Uploaded'); } else toast(data.error||'Failed',true); };
   reader.readAsDataURL(file);
@@ -257,7 +266,12 @@ function viewStore(){
     <div><label class="text-sm font-medium">Logo</label>\${imgField('logo_url',s.logo_url)}</div>
     <div><label class="text-sm font-medium">Logo Shape</label><select name="logo_shape" class="w-full border rounded-lg px-3 py-2 mt-1">\${['circle','rounded','square','blob','ellipse'].map(x=>'<option value="'+x+'" '+((s.logo_shape||'circle')===x?'selected':'')+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>').join('')}</select>
       <p class="text-xs text-slate-400 mt-1">Blob & ellipse give a modern designer look.</p></div>
+    <div><label class="text-sm font-medium">Product Card Shape</label><select name="card_shape" class="w-full border rounded-lg px-3 py-2 mt-1">\${[['default','Default'],['circle','Circle'],['rounded','Rounded'],['blob','Blob'],['arch','Arch / Window']].map(x=>'<option value="'+x[0]+'" '+((s.card_shape||'default')===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')}</select>
+      <p class="text-xs text-slate-400 mt-1">Shape of product images on your storefront.</p></div>
     <div class="md:col-span-2"><label class="text-sm font-medium">Cover Image</label>\${imgField('cover_url',s.cover_url)}</div>
+    <div class="md:col-span-2 border-t pt-4"><h4 class="font-bold mb-2">Promo Banner <span class="text-xs font-normal text-slate-400">(shows above products)</span></h4></div>
+    <div class="md:col-span-2"><label class="text-sm font-medium">Banner Text</label><input name="banner_text" value="\${f('',s.banner_text)}" placeholder="e.g. 🎉 Festive Sale — 20% off all items!" class="w-full border rounded-lg px-3 py-2 mt-1"></div>
+    <div class="md:col-span-2"><label class="text-sm font-medium">Banner Image (optional)</label>\${imgField('banner_url',s.banner_url)}</div>
     <div><label class="text-sm font-medium">Primary Color</label><input name="primary_color" type="color" value="\${s.primary_color||'#4f46e5'}" class="w-full border rounded-lg h-10 mt-1"></div>
     <div><label class="text-sm font-medium">Accent Color</label><input name="accent_color" type="color" value="\${s.accent_color||'#06b6d4'}" class="w-full border rounded-lg h-10 mt-1"></div>
     <div><label class="text-sm font-medium">Currency</label><input name="currency" value="\${f('INR',s.currency)}" class="w-full border rounded-lg px-3 py-2 mt-1"></div>
@@ -408,7 +422,7 @@ function otMsg(m){
   return '<div class="'+(mine?'text-right':'text-left')+'"><span class="inline-block px-3 py-2 rounded-2xl text-sm '+(mine?'bg-indigo-600 text-white':'bg-slate-100')+'" style="max-width:80%">'+(m.body?esc(m.body):'')+att+'</span><p class="text-[10px] text-slate-400">'+(mine?'You (owner)':'Customer')+'</p></div>';
 }
 let OATT={};
-function otAttach(id){ const f=$('orepf'+id).files[0]; if(!f)return; if(f.size>800*1024){ toast('Max 800KB',true); return; } const r=new FileReader(); r.onload=()=>{ OATT[id]={url:r.result,kind:f.type.startsWith('video')?'video':'image'}; $('oratt'+id).textContent='Attached: '+f.name; }; r.readAsDataURL(f); }
+function otAttach(id){ const f=$('orepf'+id).files[0]; if(!f)return; if(f.size>3*1024*1024){ toast('Max 3MB',true); return; } const r=new FileReader(); r.onload=()=>{ OATT[id]={url:r.result,kind:f.type.startsWith('video')?'video':'image'}; $('oratt'+id).textContent='Attached: '+f.name; }; r.readAsDataURL(f); }
 async function ownerReply(id){
   const body=$('orep'+id).value; const a=OATT[id]||{};
   if(!body&&!a.url){ toast('Write a reply',true); return; }
@@ -456,7 +470,7 @@ function viewRequest(){
     '<button class="bg-indigo-600 text-white font-bold px-5 py-2.5 rounded-lg">Send Request</button> <span id="frMsg" class="text-sm ml-2"></span></form>');
 }
 let FRATT=null;
-function frAttachInit(){ const f=$('frFile'); if(f) f.onchange=()=>{ const file=f.files[0]; if(!file)return; if(file.size>800*1024){ toast('Max 800KB',true); f.value=''; return; } const r=new FileReader(); r.onload=()=>{ FRATT=r.result; $('frInfo').textContent='Attached: '+file.name; }; r.readAsDataURL(file); }; }
+function frAttachInit(){ const f=$('frFile'); if(f) f.onchange=()=>{ const file=f.files[0]; if(!file)return; if(file.size>3*1024*1024){ toast('Max 3MB',true); f.value=''; return; } const r=new FileReader(); r.onload=()=>{ FRATT=r.result; $('frInfo').textContent='Attached: '+file.name; }; r.readAsDataURL(file); }; }
 async function sendFeature(e){ e.preventDefault(); const m=$('frMsg'); m.textContent='Sending...'; m.className='text-sm ml-2';
   const {data}=await axios.post('/api/owner/feature-request',{subject:$('frSub').value,body:$('frBody').value,attach_url:FRATT||''},{headers:authHeaders()});
   if(data.ok){ m.textContent='✓ '+data.message; m.className='text-sm ml-2 text-green-600'; $('frForm').reset(); FRATT=null; $('frInfo').textContent=''; }

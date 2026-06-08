@@ -42,14 +42,14 @@ const SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id INTEGER NOT NULL, plan TEXT NOT NULL, amount REAL NOT NULL, txn_id TEXT, status TEXT DEFAULT 'pending', gateway TEXT DEFAULT 'payu', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE INDEX IF NOT EXISTS idx_subs_owner ON subscriptions(owner_id)`,
   `CREATE TABLE IF NOT EXISTS platform_settings (key TEXT PRIMARY KEY, value TEXT)`,
-  `CREATE TABLE IF NOT EXISTS media (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, kind TEXT DEFAULT 'image', data_url TEXT NOT NULL, label TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS media (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, name TEXT, mime TEXT, kind TEXT DEFAULT 'image', data TEXT NOT NULL, size INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL, password TEXT NOT NULL, phone TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE INDEX IF NOT EXISTS idx_customers_store ON customers(store_id, email)`,
   `CREATE TABLE IF NOT EXISTS tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, customer_id INTEGER, order_id INTEGER, subject TEXT, status TEXT DEFAULT 'open', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE INDEX IF NOT EXISTS idx_tickets_store ON tickets(store_id)`,
   `CREATE TABLE IF NOT EXISTS ticket_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, sender TEXT NOT NULL, body TEXT, attach_url TEXT, attach_kind TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE INDEX IF NOT EXISTS idx_tmsg_ticket ON ticket_messages(ticket_id)`,
-  `CREATE TABLE IF NOT EXISTS feature_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id INTEGER NOT NULL, store_id INTEGER, title TEXT, body TEXT, forwarded INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS feature_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id INTEGER NOT NULL, store_id INTEGER, subject TEXT, body TEXT, attach_url TEXT, forwarded INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE TABLE IF NOT EXISTS platform_tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT NOT NULL, subject TEXT NOT NULL, status TEXT DEFAULT 'open', forwarded INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE TABLE IF NOT EXISTS platform_ticket_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, sender TEXT NOT NULL, body TEXT, attach_url TEXT, attach_kind TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE INDEX IF NOT EXISTS idx_ptmsg_ticket ON platform_ticket_messages(ticket_id)`,
@@ -72,11 +72,27 @@ const ALTERS: string[] = [
   `ALTER TABLE orders ADD COLUMN order_code TEXT DEFAULT ''`,
   `ALTER TABLE products ADD COLUMN features TEXT DEFAULT ''`,
   `ALTER TABLE products ADD COLUMN addons TEXT DEFAULT ''`,
+  `ALTER TABLE products ADD COLUMN media_shape TEXT DEFAULT 'default'`,
+  // Fix media/feature_requests columns on DBs created with the old schema.
+  `ALTER TABLE media ADD COLUMN name TEXT`,
+  `ALTER TABLE media ADD COLUMN mime TEXT`,
+  `ALTER TABLE media ADD COLUMN data TEXT`,
+  `ALTER TABLE media ADD COLUMN size INTEGER`,
+  `ALTER TABLE feature_requests ADD COLUMN subject TEXT`,
+  `ALTER TABLE feature_requests ADD COLUMN attach_url TEXT`,
+  // Store banner / section customization (owner full flexibility).
+  `ALTER TABLE stores ADD COLUMN banner_url TEXT DEFAULT ''`,
+  `ALTER TABLE stores ADD COLUMN banner_text TEXT DEFAULT ''`,
+  `ALTER TABLE stores ADD COLUMN sections TEXT DEFAULT ''`,
+  `ALTER TABLE stores ADD COLUMN card_shape TEXT DEFAULT 'default'`,
 ]
 
 const SEED: string[] = [
   `INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('super_admin_pin', '2005####')`,
   `INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('platform_name', 'Storenest')`,
+  // PayU live merchant credentials (INSERT OR IGNORE so super-admin edits persist).
+  `INSERT OR IGNORE INTO platform_settings (key, value) VALUES ('payu_key', 'WxDaR0')`,
+  `INSERT OR IGNORE INTO platform_settings (key, value) VALUES ('payu_salt', 'MHDpyn7llm4UwyBxCiyO4xBOspqyVIoj')`,
   // PayU live merchant credentials (INSERT OR IGNORE so super-admin edits persist).
   `INSERT OR IGNORE INTO platform_settings (key, value) VALUES ('payu_key', 'WxDaR0')`,
   `INSERT OR IGNORE INTO platform_settings (key, value) VALUES ('payu_salt', 'MHDpyn7llm4UwyBxCiyO4xBOspqyVIoj')`,
@@ -103,11 +119,23 @@ export async function ensureBootstrap(db: D1Database): Promise<void> {
     // Fast path: if the super_admin_pin row exists, schema+seed are already in place.
     const ok = await db.prepare("SELECT value FROM platform_settings WHERE key='super_admin_pin'").first().catch(() => null)
     if (ok) {
-      // Still ensure PayU credentials exist for DBs created before this build.
+      // Self-heal DBs created before this build.
       try {
         await db.prepare("INSERT OR IGNORE INTO platform_settings (key,value) VALUES ('payu_key','WxDaR0')").run()
         await db.prepare("INSERT OR IGNORE INTO platform_settings (key,value) VALUES ('payu_salt','MHDpyn7llm4UwyBxCiyO4xBOspqyVIoj')").run()
       } catch { /* ignore */ }
+      // The old `media` table used a NOT NULL `data_url` column that breaks the
+      // current insert (name/mime/data/size). Detect & rebuild it cleanly.
+      try {
+        const info = await db.prepare("PRAGMA table_info(media)").all()
+        const cols = (info.results || []).map((r: any) => r.name)
+        if (cols.includes('data_url') && !cols.includes('data')) {
+          await db.prepare('DROP TABLE IF EXISTS media').run()
+          await db.prepare("CREATE TABLE media (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, name TEXT, mime TEXT, kind TEXT DEFAULT 'image', data TEXT NOT NULL, size INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)").run()
+        }
+      } catch { /* ignore */ }
+      // Apply additive ALTERs (new columns) idempotently on existing DBs.
+      for (const sql of ALTERS) { try { await db.prepare(sql).run() } catch { /* dup ignored */ } }
       bootstrapped = true; return
     }
   } catch { /* table doesn't exist yet — fall through to create */ }
