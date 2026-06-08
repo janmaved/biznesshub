@@ -39,26 +39,39 @@ export function storefrontPage(store: any): string {
     address: store.address || undefined
   }
 
+  // Server-side label for the primary action button, based on store category.
+  const labelFor = (cat: string) => {
+    const c = String(cat || '').toLowerCase()
+    if (c === 'restaurant' || c === 'food' || c === 'cafe' || c === 'bakery') return 'Menu'
+    if (c === 'services' || c === 'service' || c === 'salon' || c === 'consulting') return 'Services'
+    if (c === 'retail' || c === 'store' || c === 'shop' || c === 'fashion') return 'Products'
+    return 'Collection'
+  }
   // Hero markup varies by theme heroShape.
-  const heroInner = `
-      <h1 class="hero-title text-3xl md:text-5xl font-extrabold">${esc(store.name)}</h1>
-      ${store.tagline ? `<p class="mt-3 text-lg opacity-90">${esc(store.tagline)}</p>` : ''}
-      <div class="mt-6 flex flex-wrap gap-3 justify-center text-sm">
+  const heroBadge = `<span class="chip inline-block mb-4 text-xs md:text-sm"><i class="fas fa-star mr-1" style="color:#fde047"></i> ${esc(store.category ? store.category.charAt(0).toUpperCase() + store.category.slice(1) : 'Premium')} · Order online</span>`
+  const heroActions = (align) => `
+      <div class="mt-7 flex flex-wrap gap-3 ${align} text-sm">
+        <a href="#products" class="btn-primary px-6 py-3"><i class="fas fa-bag-shopping mr-1"></i> Explore ${labelFor(store.category)}</a>
         ${store.phone ? `<a href="tel:${esc(store.phone)}" class="chip"><i class="fas fa-phone mr-1"></i> Call</a>` : ''}
         ${store.whatsapp ? `<a href="https://wa.me/${esc(store.whatsapp)}" class="chip"><i class="fab fa-whatsapp mr-1"></i> WhatsApp</a>` : ''}
         <a href="#enquiry" class="chip"><i class="fas fa-envelope mr-1"></i> Enquiry</a>
       </div>`
+  const heroInner = (centered = true) => `
+      ${heroBadge}
+      <h1 class="hero-title text-4xl md:text-6xl">${esc(store.name)}</h1>
+      ${store.tagline ? `<p class="mt-4 text-lg md:text-xl opacity-90 max-w-xl ${centered ? 'mx-auto' : ''}">${esc(store.tagline)}</p>` : ''}
+      ${heroActions(centered ? 'justify-center' : '')}`
 
   let hero = ''
   if (th.heroShape === 'split') {
-    hero = `<div class="max-w-6xl mx-auto px-4 py-12 md:py-20 grid md:grid-cols-2 gap-8 items-center">
-      <div class="text-left">${heroInner}</div>
-      <div class="hidden md:block">${store.cover_url ? `<img src="${esc(store.cover_url)}" class="rounded-2xl w-full h-72 object-cover shadow-xl">` : `<div class="rounded-2xl w-full h-72 hero-art"></div>`}</div>
+    hero = `<div class="max-w-6xl mx-auto px-4 py-14 md:py-24 grid md:grid-cols-2 gap-10 items-center">
+      <div class="text-left">${heroInner(false)}</div>
+      <div class="hidden md:block">${store.cover_url ? `<img src="${esc(store.cover_url)}" class="rounded-3xl w-full h-80 object-cover shadow-2xl" style="animation:floatY 7s ease-in-out infinite">` : `<div class="rounded-3xl w-full h-80 hero-art" style="animation:floatY 7s ease-in-out infinite"></div>`}</div>
     </div>`
   } else if (th.heroShape === 'image' && store.cover_url) {
-    hero = `<div class="hero-bg" style="background-image:url('${esc(store.cover_url)}')"><div class="hero-overlay max-w-6xl mx-auto px-4 py-20 md:py-28 text-center">${heroInner}</div></div>`
+    hero = `<div class="hero-bg" style="background-image:url('${esc(store.cover_url)}')"><div class="hero-overlay max-w-6xl mx-auto px-4 py-24 md:py-36 text-center">${heroInner(true)}</div></div>`
   } else {
-    hero = `<div class="max-w-6xl mx-auto px-4 py-12 md:py-20 text-center">${heroInner}</div>`
+    hero = `<div class="max-w-6xl mx-auto px-4 py-14 md:py-24 text-center">${heroInner(true)}</div>`
   }
 
   return `<!DOCTYPE html>
@@ -87,31 +100,58 @@ export function storefrontPage(store: any): string {
   </script>
   <style>
     :root{--primary:${primary};--accent:${accent};--bg:${th.bg};--surface:${th.surface};--text:${th.text};--muted:${th.muted};--radius:${th.radius}}
-    body{background:var(--bg);color:var(--text);font-family:${th.font}}
-    .hero-title{${th.uppercaseHeads ? 'text-transform:uppercase;letter-spacing:.04em;' : ''}}
-    h2,h3{font-family:${th.font}}
-    .btn-primary{background:var(--primary);color:#fff;border-radius:var(--radius)}
-    .btn-primary:hover{filter:brightness(.93)}
+    *{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:${th.font};-webkit-font-smoothing:antialiased}
+    @keyframes heroShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+    @keyframes floatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+    .hero-title{${th.uppercaseHeads ? 'text-transform:uppercase;letter-spacing:.06em;' : 'letter-spacing:-.02em;'}line-height:1.05;font-weight:800;text-shadow:${dark ? '0 2px 30px rgba(0,0,0,.5)' : '0 2px 20px rgba(0,0,0,.12)'}}
+    h2,h3{font-family:${th.font};letter-spacing:${th.uppercaseHeads ? '.04em' : '-.01em'}}
+    .section-head{position:relative;display:inline-block;font-weight:800;font-size:1.6rem;${th.uppercaseHeads ? 'text-transform:uppercase;letter-spacing:.05em;' : ''}}
+    .section-head::after{content:'';position:absolute;left:0;bottom:-8px;width:46px;height:4px;border-radius:99px;background:linear-gradient(90deg,var(--primary),var(--accent))}
+    .btn-primary{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;border-radius:var(--radius);box-shadow:0 6px 18px -6px var(--primary);transition:.2s;font-weight:600}
+    .btn-primary:hover{filter:brightness(1.05);transform:translateY(-1px);box-shadow:0 10px 24px -6px var(--primary)}
     .text-primary{color:var(--primary)}
-    .chip{background:${dark ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.22)'};padding:.5rem 1rem;border-radius:999px}
-    .chip:hover{background:rgba(255,255,255,.3)}
-    .theme-hero{${th.heroShape === 'dark'
-      ? 'background:linear-gradient(135deg,#000,var(--primary));color:#fff'
+    .chip{background:${dark ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.22)'};backdrop-filter:blur(6px);padding:.55rem 1.1rem;border-radius:999px;border:1px solid rgba(255,255,255,.25);transition:.2s;font-weight:600}
+    .chip:hover{background:rgba(255,255,255,.34);transform:translateY(-2px)}
+
+    /* ---------- PREMIUM HERO TREATMENTS ---------- */
+    .theme-hero{position:relative;overflow:hidden;${
+      th.heroShape === 'dark'
+        ? 'background:radial-gradient(1200px 500px at 80% -10%,color-mix(in srgb,var(--primary) 55%,transparent),transparent),linear-gradient(135deg,#0b0b10,#1a1525 60%,var(--primary));color:#fff'
       : th.heroShape === 'minimal'
-        ? 'background:var(--surface);color:var(--text);border-bottom:1px solid rgba(0,0,0,.06)'
-        : 'background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff'}}
-    .theme-hero .chip{color:${th.heroShape === 'minimal' ? 'var(--text)' : '#fff'}}
-    .theme-hero .chip{${th.heroShape === 'minimal' ? 'background:rgba(0,0,0,.06)' : ''}}
-    .hero-art{background:linear-gradient(135deg,var(--primary),var(--accent))}
+        ? 'background:var(--surface);color:var(--text);border-bottom:1px solid rgba(0,0,0,.07)'
+        : 'background:linear-gradient(120deg,var(--primary),var(--accent),var(--primary));background-size:200% 200%;animation:heroShift 14s ease infinite;color:#fff'
+    }}
+    /* soft decorative orbs */
+    .theme-hero::before{content:'';position:absolute;width:380px;height:380px;border-radius:50%;top:-140px;right:-80px;background:${dark ? 'radial-gradient(circle,rgba(255,255,255,.18),transparent 70%)' : 'radial-gradient(circle,rgba(255,255,255,.35),transparent 70%)'};animation:floatY 9s ease-in-out infinite;pointer-events:none}
+    .theme-hero::after{content:'';position:absolute;width:260px;height:260px;border-radius:50%;bottom:-120px;left:-60px;background:${dark ? 'radial-gradient(circle,color-mix(in srgb,var(--accent) 35%,transparent),transparent 70%)' : 'radial-gradient(circle,rgba(255,255,255,.22),transparent 70%)'};animation:floatY 11s ease-in-out infinite reverse;pointer-events:none}
+    ${th.heroShape === 'minimal' ? '.theme-hero::before,.theme-hero::after{opacity:.5}' : ''}
+    .theme-hero > *{position:relative;z-index:1;animation:fadeUp .7s ease both}
+    .theme-hero .chip{color:${th.heroShape === 'minimal' ? 'var(--text)' : '#fff'};${th.heroShape === 'minimal' ? 'background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.08)' : ''}}
+    .hero-art{background:linear-gradient(135deg,var(--primary),var(--accent));position:relative;overflow:hidden;box-shadow:0 30px 60px -20px var(--primary)}
+    .hero-art::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 20%,rgba(255,255,255,.4),transparent 50%)}
     .hero-bg{background-size:cover;background-position:center;color:#fff;position:relative}
-    .hero-overlay{background:rgba(0,0,0,.45)}
-    .prod-card{background:var(--surface);border-radius:var(--radius);transition:.2s;${th.cardStyle === 'border' ? 'border:1px solid rgba(120,120,120,.25)' : th.cardStyle === 'flat' ? '' : th.cardStyle === 'glass' ? 'background:rgba(255,255,255,.06);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12)' : 'box-shadow:0 4px 14px rgba(0,0,0,.06)'}}
-    .prod-card:hover{transform:translateY(-4px);${th.cardStyle === 'shadow' ? 'box-shadow:0 14px 30px rgba(0,0,0,.14)' : 'box-shadow:0 8px 20px rgba(0,0,0,.10)'}}
+    .hero-overlay{background:linear-gradient(to top,rgba(0,0,0,.7),rgba(0,0,0,.25))}
+
+    /* ---------- PREMIUM PRODUCT CARDS ---------- */
+    .prod-card{background:var(--surface);border-radius:var(--radius);transition:transform .25s,box-shadow .25s,border-color .25s;overflow:hidden;${
+      th.cardStyle === 'border' ? 'border:1px solid rgba(120,120,120,.22)'
+      : th.cardStyle === 'flat' ? 'box-shadow:0 1px 0 rgba(0,0,0,.04)'
+      : th.cardStyle === 'glass' ? 'background:rgba(255,255,255,.07);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14)'
+      : 'box-shadow:0 6px 22px -10px rgba(0,0,0,.20)'
+    }}
+    .prod-card img{transition:transform .4s ease}
+    .prod-card:hover{transform:translateY(-6px);${th.cardStyle === 'border' ? 'border-color:var(--primary);' : ''}box-shadow:0 22px 44px -16px ${dark ? 'rgba(0,0,0,.6)' : 'color-mix(in srgb,var(--primary) 40%,rgba(0,0,0,.18))'}}
+    .prod-card:hover img{transform:scale(1.06)}
     .surface{background:var(--surface)}
-    .catbtn{border-radius:999px}
-    .catbtn.active{background:var(--primary);color:#fff}
-    .catbtn:not(.active){background:var(--surface);border:1px solid rgba(120,120,120,.25)}
+    .catbtn{border-radius:999px;transition:.2s;font-weight:600}
+    .catbtn.active{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;box-shadow:0 6px 16px -6px var(--primary)}
+    .catbtn:not(.active){background:var(--surface);border:1px solid rgba(120,120,120,.22)}
+    .catbtn:not(.active):hover{border-color:var(--primary);color:var(--primary)}
     .wave-bottom{margin-bottom:-1px}
+    /* subtle reveal for product grid */
+    #products > *{animation:fadeUp .5s ease both}
   </style>
 </head>
 <body data-slug="${esc(store.slug)}" data-currency="${esc(store.currency || 'INR')}" data-theme="${esc(store.theme)}">
