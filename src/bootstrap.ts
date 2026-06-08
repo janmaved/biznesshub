@@ -70,6 +70,8 @@ const ALTERS: string[] = [
   `ALTER TABLE orders ADD COLUMN payment_utr TEXT DEFAULT ''`,
   `ALTER TABLE orders ADD COLUMN tracking_link TEXT DEFAULT ''`,
   `ALTER TABLE orders ADD COLUMN order_code TEXT DEFAULT ''`,
+  `ALTER TABLE products ADD COLUMN features TEXT DEFAULT ''`,
+  `ALTER TABLE products ADD COLUMN addons TEXT DEFAULT ''`,
 ]
 
 const SEED: string[] = [

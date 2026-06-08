@@ -265,18 +265,22 @@ api.post('/owner/products', async (c) => {
   const owner = await authOwner(c); if (!owner) return json(c, { ok: false }, 401)
   const store = await getOwnerStore(c.env.DB, owner.id)
   const b = await c.req.json()
-  const r = await c.env.DB.prepare(`INSERT INTO products (store_id,category_id,name,description,price,sale_price,image_url,in_stock,is_featured,sort_order)
-    VALUES (?,?,?,?,?,?,?,?,?,?)`)
-    .bind(store.id, b.category_id || null, b.name, b.description || '', b.price || 0, b.sale_price || null, b.image_url || '', b.in_stock ? 1 : 0, b.is_featured ? 1 : 0, b.sort_order || 0).run()
+  const feats = JSON.stringify(Array.isArray(b.features) ? b.features : [])
+  const adds = JSON.stringify(Array.isArray(b.addons) ? b.addons : [])
+  const r = await c.env.DB.prepare(`INSERT INTO products (store_id,category_id,name,description,price,sale_price,image_url,in_stock,is_featured,sort_order,features,addons)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(store.id, b.category_id || null, b.name, b.description || '', b.price || 0, b.sale_price || null, b.image_url || '', b.in_stock ? 1 : 0, b.is_featured ? 1 : 0, b.sort_order || 0, feats, adds).run()
   return json(c, { ok: true, id: r.meta.last_row_id })
 })
 api.put('/owner/products/:id', async (c) => {
   const owner = await authOwner(c); if (!owner) return json(c, { ok: false }, 401)
   const store = await getOwnerStore(c.env.DB, owner.id)
   const b = await c.req.json()
-  await c.env.DB.prepare(`UPDATE products SET category_id=?,name=?,description=?,price=?,sale_price=?,image_url=?,in_stock=?,is_featured=?
+  const feats = JSON.stringify(Array.isArray(b.features) ? b.features : [])
+  const adds = JSON.stringify(Array.isArray(b.addons) ? b.addons : [])
+  await c.env.DB.prepare(`UPDATE products SET category_id=?,name=?,description=?,price=?,sale_price=?,image_url=?,in_stock=?,is_featured=?,features=?,addons=?
     WHERE id=? AND store_id=?`)
-    .bind(b.category_id || null, b.name, b.description || '', b.price || 0, b.sale_price || null, b.image_url || '', b.in_stock ? 1 : 0, b.is_featured ? 1 : 0, c.req.param('id'), store.id).run()
+    .bind(b.category_id || null, b.name, b.description || '', b.price || 0, b.sale_price || null, b.image_url || '', b.in_stock ? 1 : 0, b.is_featured ? 1 : 0, feats, adds, c.req.param('id'), store.id).run()
   return json(c, { ok: true })
 })
 api.delete('/owner/products/:id', async (c) => {

@@ -321,13 +321,27 @@ function productForm(){ return \`<form id="prodForm" class="space-y-2">
   </div>
   <select id="pCat" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="">No category</option>\${STATE.categories.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('')}</select>
   <label class="text-xs text-slate-500">Product Image</label>\${imgField('pImg','')}
+  <div class="border rounded-lg p-2">
+    <div class="flex justify-between items-center mb-1"><label class="text-xs font-semibold text-slate-600">Key Features / Highlights</label><button type="button" onclick="addFeatRow()" class="text-indigo-600 text-xs font-semibold">+ Add</button></div>
+    <div id="featRows" class="space-y-1"></div>
+  </div>
+  <div class="border rounded-lg p-2">
+    <div class="flex justify-between items-center mb-1"><label class="text-xs font-semibold text-slate-600">Extra Add-ons (optional paid extras)</label><button type="button" onclick="addAddonRow()" class="text-indigo-600 text-xs font-semibold">+ Add</button></div>
+    <div id="addonRows" class="space-y-1"></div>
+  </div>
   <div class="flex gap-4 text-sm"><label class="flex items-center gap-1"><input type="checkbox" id="pStock" checked> In stock</label><label class="flex items-center gap-1"><input type="checkbox" id="pFeat"> Featured</label></div>
   <button class="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg text-sm">Save Product</button>
 </form>\`; }
+function featRowHtml(v){ return '<div class="flex gap-1 feat-row"><input class="flex-1 border rounded px-2 py-1 text-sm feat-val" placeholder="e.g. 100% organic" value="'+esc(v||'')+'"><button type="button" onclick="this.parentNode.remove()" class="text-red-400 px-1"><i class="fas fa-times"></i></button></div>'; }
+function addonRowHtml(a){ a=a||{}; return '<div class="flex gap-1 addon-row"><input class="flex-1 border rounded px-2 py-1 text-sm addon-name" placeholder="Add-on name" value="'+esc(a.name||'')+'"><input type="number" step="0.01" class="w-20 border rounded px-2 py-1 text-sm addon-price" placeholder="₹" value="'+(a.price!=null?a.price:'')+'"><button type="button" onclick="this.parentNode.remove()" class="text-red-400 px-1"><i class="fas fa-times"></i></button></div>'; }
+function addFeatRow(v){ const el=$('featRows'); if(el) el.insertAdjacentHTML('beforeend',featRowHtml(v)); }
+function addAddonRow(a){ const el=$('addonRows'); if(el) el.insertAdjacentHTML('beforeend',addonRowHtml(a)); }
+function collectFeatures(){ return Array.from(document.querySelectorAll('.feat-val')).map(i=>i.value.trim()).filter(Boolean); }
+function collectAddons(){ return Array.from(document.querySelectorAll('.addon-row')).map(r=>({name:(r.querySelector('.addon-name').value||'').trim(),price:Number(r.querySelector('.addon-price').value)||0})).filter(a=>a.name); }
 function bindProductForm(){
   const f=$('prodForm'); if(f) f.addEventListener('submit', async e=>{
     e.preventDefault();
-    const body={category_id:$('pCat').value||null,name:$('pName').value,description:$('pDesc').value,price:Number($('pPrice').value),sale_price:$('pSale').value?Number($('pSale').value):null,image_url:$('if_pImg').value,in_stock:$('pStock').checked,is_featured:$('pFeat').checked};
+    const body={category_id:$('pCat').value||null,name:$('pName').value,description:$('pDesc').value,price:Number($('pPrice').value),sale_price:$('pSale').value?Number($('pSale').value):null,image_url:$('if_pImg').value,in_stock:$('pStock').checked,is_featured:$('pFeat').checked,features:collectFeatures(),addons:collectAddons()};
     const id=$('pId').value;
     if(id) await axios.put('/api/owner/products/'+id,body,{headers:authHeaders()});
     else await axios.post('/api/owner/products',body,{headers:authHeaders()});
@@ -337,7 +351,11 @@ function bindProductForm(){
     e.preventDefault(); await axios.post('/api/owner/categories',{name:$('catName').value},{headers:authHeaders()}); await reload(); switchTab('products');
   });
 }
-function editProduct(id){ const p=STATE.products.find(x=>x.id===id); switchTab('products'); setTimeout(()=>{ $('pId').value=p.id;$('pName').value=p.name;$('pDesc').value=p.description||'';$('pPrice').value=p.price;$('pSale').value=p.sale_price||'';$('pCat').value=p.category_id||'';setImg('if_pImg',p.image_url||'');const u=$('if_pImg_url');if(u)u.value=(p.image_url||'').startsWith('data:')?'':(p.image_url||'');$('pStock').checked=!!p.in_stock;$('pFeat').checked=!!p.is_featured; },50); }
+function editProduct(id){ const p=STATE.products.find(x=>x.id===id); switchTab('products'); setTimeout(()=>{ $('pId').value=p.id;$('pName').value=p.name;$('pDesc').value=p.description||'';$('pPrice').value=p.price;$('pSale').value=p.sale_price||'';$('pCat').value=p.category_id||'';setImg('if_pImg',p.image_url||'');const u=$('if_pImg_url');if(u)u.value=(p.image_url||'').startsWith('data:')?'':(p.image_url||'');$('pStock').checked=!!p.in_stock;$('pFeat').checked=!!p.is_featured;
+  $('featRows').innerHTML=''; $('addonRows').innerHTML='';
+  let fts=[]; try{ fts=JSON.parse(p.features||'[]'); }catch(e){} (fts||[]).forEach(addFeatRow);
+  let ads=[]; try{ ads=JSON.parse(p.addons||'[]'); }catch(e){} (ads||[]).forEach(addAddonRow);
+  },50); }
 async function delProduct(id){ if(!confirm('Delete this product?'))return; await axios.delete('/api/owner/products/'+id,{headers:authHeaders()}); await reload(); switchTab('products'); }
 async function delCat(id){ await axios.delete('/api/owner/categories/'+id,{headers:authHeaders()}); await reload(); switchTab('products'); }
 
