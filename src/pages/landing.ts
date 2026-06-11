@@ -34,6 +34,7 @@ export function landingPage(): string {
         <a href="#features" class="hover:text-indigo-600">Features</a>
         <a href="#themes" class="hover:text-indigo-600">Themes</a>
         <a href="#pricing" class="hover:text-indigo-600">Pricing</a>
+        <a href="#faq" class="hover:text-indigo-600">FAQ</a>
         <a href="/s/demo" class="hover:text-indigo-600">Live Demo</a>
       </div>
       <div class="flex items-center gap-2">
@@ -94,6 +95,18 @@ export function landingPage(): string {
       <p class="mt-3 text-slate-500">Start free. Upgrade when you grow. Cancel anytime.</p>
     </div>
     <div id="pricingGrid" class="grid md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="py-20 px-4 bg-white">
+    <div class="max-w-3xl mx-auto">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-extrabold">Frequently Asked Questions</h2>
+        <p class="mt-3 text-slate-500">Everything you need to know about Storenest.</p>
+      </div>
+      <div id="faqList" class="space-y-3"></div>
+      <div class="text-center mt-10 text-slate-500 text-sm">Still have a question? <a href="/owner#signup" class="text-indigo-600 font-semibold hover:underline">Start free</a> and ask us inside your dashboard.</div>
+    </div>
   </section>
 
   <!-- CTA -->
@@ -186,6 +199,25 @@ function renderPricing(){
     </div>\`).join('');
 }
 
+var FAQS=[
+  {q:'What is Storenest?',a:'Storenest is an all-in-one website & online store builder. In minutes you can launch your own branded store, menu or booking site with online ordering, payments, coupons, AI chat support and 20+ premium themes — no coding or designer needed.'},
+  {q:'Do I need a credit card to start?',a:'No. You get a 7-day free trial with all features unlocked and no card required. Add a paid plan only when you are ready to grow.'},
+  {q:'How much does it cost?',a:'Plans start at just ₹99/month. The Starter plan (with a launch discount) gives you your own online store, a free subdomain (yourstore.storenest.app), order booking and an enquiry inbox. You can upgrade or cancel anytime.'},
+  {q:'Can I use my own domain name?',a:'Yes. On paid plans you can connect your own custom domain (like yourbusiness.com). We give you the exact DNS records to add, and a one-click verify button confirms when it is live.'},
+  {q:'How do payments work for my customers?',a:'Storenest integrates secure online payments via PayU so your customers can pay you directly. Payments are verified server-side, so an order is only confirmed once the payment genuinely succeeds.'},
+  {q:'Can I create discount coupons?',a:'Absolutely. From your owner dashboard you can create coupons (percent or flat amount). Customers see the available coupons in your store and can apply them right at checkout.'},
+  {q:'Will my store look professional?',a:'Yes. Choose from 20+ premium themes with distinct layouts (grid, magazine, showcase and more), custom colours, banners and product detail pages — designed to look like a high-end Shopify store.'},
+  {q:'Do you offer customer support?',a:'Every store includes a built-in 24/7 AI chat assistant for your customers, plus an enquiry inbox so you never miss a lead. Owners can also send feature requests from the dashboard.'},
+  {q:'Is my data safe?',a:'Yes. Storenest runs on Cloudflare’s global secure infrastructure with isolated data per store. Your customers’ and your business data stay private and protected.'},
+  {q:'Can I cancel anytime?',a:'Yes, there are no lock-in contracts. You can cancel whenever you like and keep your store running until the end of your billing period.'}
+];
+function renderFaq(){
+  var el=document.getElementById('faqList'); if(!el)return;
+  el.innerHTML=FAQS.map(function(f,i){return '<details class="group border rounded-xl px-5 py-4 bg-slate-50 hover:bg-white transition">'+
+    '<summary class="flex items-center justify-between cursor-pointer font-semibold text-slate-800 list-none">'+
+    '<span>'+f.q+'</span><i class="fas fa-chevron-down text-slate-400 group-open:rotate-180 transition"></i></summary>'+
+    '<p class="mt-3 text-slate-600 text-sm leading-relaxed">'+f.a+'</p></details>';}).join('');
+}
 function getOwnerAcct(){ try{ return JSON.parse(localStorage.getItem('sb_owner')||'null'); }catch(e){ return null; } }
 function openBuy(key){
   selectedPlan = META.plans.find(p=>p.key===key);
@@ -242,7 +274,7 @@ if(ps){ const b=document.createElement('div'); b.className='fixed top-20 left-1/
     if(META.site.hero_title){ const e=document.getElementById('heroTitle'); if(e) e.textContent=META.site.hero_title; }
     if(META.site.hero_subtitle){ const e=document.getElementById('heroSubtitle'); if(e) e.textContent=META.site.hero_subtitle; }
   }
-  renderFeatures(); renderThemes(); renderPricing();
+  renderFeatures(); renderThemes(); renderPricing(); renderFaq();
 })();
 
 // ===== HELP / SUPPORT CHATBOT (platform) =====

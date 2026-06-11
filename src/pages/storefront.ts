@@ -280,6 +280,16 @@ export function storefrontPage(store: any): string {
       <div class="p-4 border-b flex justify-between items-center"><h3 id="orderTitle" class="font-bold text-lg">Your Order</h3><button onclick="closeCart()"><i class="fas fa-times text-xl" style="color:var(--muted)"></i></button></div>
       <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
       <div class="border-t p-4">
+        <div id="couponBox" class="mb-3">
+          <div class="flex gap-2">
+            <input id="couponInput" placeholder="Coupon code" class="flex-1 border rounded-lg px-3 py-2 text-sm bg-transparent uppercase">
+            <button onclick="applyCoupon()" class="btn-primary px-3 text-sm font-semibold rounded-lg">Apply</button>
+          </div>
+          <div id="couponChips" class="flex flex-wrap gap-1 mt-2"></div>
+          <p id="couponMsg" class="text-xs mt-1"></p>
+        </div>
+        <div id="subRow" class="flex justify-between text-sm mb-1 hidden"><span style="color:var(--muted)">Subtotal</span><span id="cartSub"></span></div>
+        <div id="discRow" class="flex justify-between text-sm mb-1 hidden text-green-600"><span>Discount</span><span id="cartDisc"></span></div>
         <div class="flex justify-between font-bold text-lg mb-3"><span>Total</span><span id="cartTotal"></span></div>
         <div id="checkoutForm" class="space-y-2">
           <div id="checkoutFields"></div>
@@ -287,6 +297,17 @@ export function storefrontPage(store: any): string {
           <p id="orderResult" class="text-sm text-center"></p>
         </div>
         <div id="payInfo" class="hidden mt-3 rounded-lg p-3 text-sm" style="background:rgba(120,120,120,.08)"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCT DETAIL MODAL -->
+  <div id="prodModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeProduct()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="surface rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto relative">
+        <button onclick="closeProduct()" class="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-black/40 text-white flex items-center justify-center"><i class="fas fa-times"></i></button>
+        <div id="prodModalBody"></div>
       </div>
     </div>
   </div>
@@ -355,15 +376,36 @@ function renderProducts(){
     const featHtml=(feats&&feats.length)?'<ul class="text-xs mt-2 space-y-0.5" style="color:var(--muted)">'+feats.map(f=>'<li><i class="fas fa-check text-green-500 mr-1"></i>'+esc(f)+'</li>').join('')+'</ul>':'';
     const addonHtml=(addons&&addons.length)?'<div class="mt-2 border-t pt-2"><p class="text-xs font-semibold mb-1" style="color:var(--muted)">Add extras:</p><div class="flex flex-wrap gap-1">'+addons.map((a,i)=>'<button type="button" data-pa="'+p.id+'_'+i+'" onclick="toggleAddon('+p.id+','+i+',this)" class="addon-chip text-xs border rounded-full px-2 py-1">'+esc(a.name)+' +'+CUR+a.price+'</button>').join('')+'</div></div>':'';
     const stock=(p.in_stock===0||p.in_stock===false);
-    const media='<div class="prod-media">'+(p.image_url?'<img src="'+p.image_url+'" alt="'+esc(p.name)+'">':'<i class="fas fa-image"></i>')+'</div>';
+    const media='<div class="prod-media" style="cursor:pointer" onclick="viewProduct('+p.id+')">'+(p.image_url?'<img src="'+p.image_url+'" alt="'+esc(p.name)+'">':'<i class="fas fa-image"></i>')+'</div>';
     return '<div class="prod-card">'+media+
-      '<div class="pc-body"><div class="flex justify-between items-start gap-2"><h3 class="font-bold">'+esc(p.name)+'</h3>'+(p.is_featured?'<span class="text-amber-500 text-xs whitespace-nowrap">★ Popular</span>':'')+'</div>'+
+      '<div class="pc-body"><div class="flex justify-between items-start gap-2"><h3 class="font-bold" style="cursor:pointer" onclick="viewProduct('+p.id+')">'+esc(p.name)+'</h3>'+(p.is_featured?'<span class="text-amber-500 text-xs whitespace-nowrap">★ Popular</span>':'')+'</div>'+
       (p.description?'<p class="text-sm mt-1" style="color:var(--muted)">'+esc(p.description)+'</p>':'')+
       featHtml+addonHtml+
       '<div class="flex justify-between items-center mt-3 pt-1"><div>'+(p.sale_price?'<span class="line-through text-sm mr-1" style="color:var(--muted)">'+CUR+' '+p.price+'</span>':'')+'<span class="font-bold text-primary">'+CUR+' '+price+'</span></div>'+
+      '<button onclick="viewProduct('+p.id+')" class="text-sm font-semibold px-2 py-1.5" style="color:var(--primary)">Details</button>'+
       (stock?'<span class="text-xs text-red-500 font-semibold">Out of stock</span>':'<button onclick="addCart('+p.id+')" class="btn-primary text-sm font-semibold px-3 py-1.5">'+LBL.add+'</button>')+'</div></div></div>';
   }).join('');
 }
+function viewProduct(id){
+  const p=PRODUCTS.find(x=>x.id===id); if(!p)return;
+  const price=p.sale_price||p.price;
+  const stock=(p.in_stock===0||p.in_stock===false);
+  let feats=[]; try{ feats=JSON.parse(p.features||'[]'); }catch(e){}
+  let addons=[]; try{ addons=JSON.parse(p.addons||'[]'); }catch(e){}
+  const img=p.image_url?'<img src="'+p.image_url+'" alt="'+esc(p.name)+'" style="width:100%;max-height:340px;object-fit:cover;border-radius:1rem 1rem 0 0">':'<div style="height:200px;display:flex;align-items:center;justify-content:center;background:rgba(120,120,120,.1);border-radius:1rem 1rem 0 0"><i class="fas fa-image text-4xl" style="color:var(--muted)"></i></div>';
+  const featHtml=(feats&&feats.length)?'<div class="mt-4"><h4 class="font-semibold mb-2">What you get</h4><ul class="space-y-1 text-sm" style="color:var(--muted)">'+feats.map(f=>'<li><i class="fas fa-check text-green-500 mr-2"></i>'+esc(f)+'</li>').join('')+'</ul></div>':'';
+  const addonHtml=(addons&&addons.length)?'<div class="mt-4"><h4 class="font-semibold mb-2">Available extras</h4><div class="flex flex-wrap gap-2">'+addons.map(a=>'<span class="text-sm border rounded-full px-3 py-1">'+esc(a.name)+' +'+CUR+a.price+'</span>').join('')+'</div></div>':'';
+  document.getElementById('prodModalBody').innerHTML=img+
+    '<div class="p-5">'+
+    '<div class="flex items-start justify-between gap-3"><h2 class="text-2xl font-bold">'+esc(p.name)+'</h2>'+(p.is_featured?'<span class="text-amber-500 text-sm whitespace-nowrap">★ Popular</span>':'')+'</div>'+
+    '<div class="mt-2">'+(p.sale_price?'<span class="line-through mr-2" style="color:var(--muted)">'+CUR+' '+p.price+'</span>':'')+'<span class="text-2xl font-bold text-primary">'+CUR+' '+price+'</span></div>'+
+    (p.description?'<p class="mt-4 leading-relaxed whitespace-pre-line" style="color:var(--muted)">'+esc(p.description)+'</p>':'<p class="mt-4" style="color:var(--muted)">No description added.</p>')+
+    featHtml+addonHtml+
+    '<div class="mt-6">'+(stock?'<p class="text-red-500 font-semibold">Out of stock</p>':'<button onclick="addCart('+p.id+');closeProduct();openCart()" class="btn-primary w-full font-bold py-3">'+LBL.add+' · '+CUR+' '+price+'</button>')+'</div>'+
+    '</div>';
+  document.getElementById('prodModal').classList.remove('hidden');
+}
+function closeProduct(){ document.getElementById('prodModal').classList.add('hidden'); }
 // selected add-ons per product (set of indices)
 window.SEL_ADDONS={};
 function toggleAddon(pid,idx,btn){
@@ -390,12 +432,42 @@ function addCart(id){
   document.querySelectorAll('[data-pa^="'+id+'_"]').forEach(b=>{ b.classList.remove('btn-primary'); b.style.opacity=''; });
   updateCart(); toast(lineName+' added');
 }
+var APPLIED_COUPON=null;
+function cartSubtotal(){ return CART.reduce((s,c)=>s+c.price*c.qty,0); }
+function couponDiscount(sub){
+  if(!APPLIED_COUPON) return 0;
+  let d= APPLIED_COUPON.discount_type==='percent' ? Math.round(sub*Number(APPLIED_COUPON.discount_value)/100) : Number(APPLIED_COUPON.discount_value);
+  if(d>sub) d=sub; return d>0?d:0;
+}
+function renderCouponChips(){
+  var el=document.getElementById('couponChips'); if(!el)return;
+  if(!COUPONS.length){ el.innerHTML=''; return; }
+  el.innerHTML='<span class="text-xs" style="color:var(--muted)">Available:</span> '+COUPONS.map(c=>'<button type="button" onclick="useCoupon(\\''+c.code+'\\')" class="text-xs border rounded-full px-2 py-0.5" style="border-color:var(--primary);color:var(--primary)">'+esc(c.code)+' · '+(c.discount_type==='percent'?c.discount_value+'%':CUR+c.discount_value)+'</button>').join(' ');
+}
+function useCoupon(code){ document.getElementById('couponInput').value=code; applyCoupon(); }
+function applyCoupon(){
+  var code=(document.getElementById('couponInput').value||'').trim().toUpperCase();
+  var msg=document.getElementById('couponMsg');
+  if(!code){ APPLIED_COUPON=null; msg.textContent=''; renderCart(); return; }
+  var c=COUPONS.find(x=>String(x.code).toUpperCase()===code);
+  if(!c){ APPLIED_COUPON=null; msg.textContent='Invalid coupon code'; msg.className='text-xs mt-1 text-red-500'; renderCart(); return; }
+  APPLIED_COUPON=c; msg.textContent='✅ Coupon "'+c.code+'" applied'; msg.className='text-xs mt-1 text-green-600'; renderCart();
+}
 function updateCart(){ document.getElementById('cartCount').textContent=CART.reduce((s,c)=>s+c.qty,0); renderCart(); }
 function renderCart(){
   const el=document.getElementById('cartItems');
-  if(!CART.length){ el.innerHTML='<p class="text-center py-10" style="color:var(--muted)">Cart is empty</p>'; document.getElementById('cartTotal').textContent=CUR+' 0'; return; }
+  renderCouponChips();
+  if(!CART.length){ el.innerHTML='<p class="text-center py-10" style="color:var(--muted)">Cart is empty</p>'; document.getElementById('cartTotal').textContent=CUR+' 0'; document.getElementById('subRow').classList.add('hidden'); document.getElementById('discRow').classList.add('hidden'); return; }
   el.innerHTML=CART.map(c=>'<div class="flex items-center justify-between border-b pb-2"><div><p class="font-semibold text-sm">'+esc(c.name)+'</p><p class="text-xs" style="color:var(--muted)">'+CUR+' '+c.price+'</p></div><div class="flex items-center gap-2"><button onclick="chQty('+c.id+',-1)" class="w-7 h-7 rounded" style="background:rgba(120,120,120,.12)">-</button><span>'+c.qty+'</span><button onclick="chQty('+c.id+',1)" class="w-7 h-7 rounded" style="background:rgba(120,120,120,.12)">+</button></div></div>').join('');
-  const total=CART.reduce((s,c)=>s+c.price*c.qty,0);
+  const sub=cartSubtotal();
+  const disc=couponDiscount(sub);
+  const total=sub-disc;
+  if(disc>0){
+    document.getElementById('subRow').classList.remove('hidden');
+    document.getElementById('discRow').classList.remove('hidden');
+    document.getElementById('cartSub').textContent=CUR+' '+sub;
+    document.getElementById('cartDisc').textContent='- '+CUR+' '+disc;
+  } else { document.getElementById('subRow').classList.add('hidden'); document.getElementById('discRow').classList.add('hidden'); }
   document.getElementById('cartTotal').textContent=CUR+' '+total;
 }
 function chQty(id,d){ const c=CART.find(x=>x.id===id); c.qty+=d; if(c.qty<=0)CART=CART.filter(x=>x.id!==id); updateCart(); }
@@ -434,6 +506,7 @@ async function placeOrder(){
   if(!out.customer_name){ toast('Enter your name',true); return; }
   const r=document.getElementById('orderResult'); r.textContent='Placing...'; r.className='text-sm text-center';
   const body=Object.assign({},out,{items:CART});
+  if(APPLIED_COUPON){ body.coupon_code=APPLIED_COUPON.code; body.discount=couponDiscount(cartSubtotal()); }
   if(ACC) body.customer_id=ACC.id;
   const {data}=await axios.post('/api/store/'+SLUG+'/order',body);
   if(data.ok){

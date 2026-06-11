@@ -710,14 +710,27 @@ api.post('/store/:slug/order', async (c) => {
   if (!store) return json(c, { ok: false, error: 'Store not found' }, 404)
   const b = await c.req.json()
   if (!b.customer_name || !Array.isArray(b.items) || b.items.length === 0) return json(c, { ok: false, error: 'Invalid order' }, 400)
-  const total = b.items.reduce((s: number, it: any) => s + (it.price * it.qty), 0)
+  const subtotal = b.items.reduce((s: number, it: any) => s + (it.price * it.qty), 0)
+  // Re-validate coupon server-side (never trust client discount).
+  let discount = 0, couponCode = ''
+  if (b.coupon_code) {
+    const cp = await c.env.DB.prepare('SELECT * FROM coupons WHERE store_id=? AND UPPER(code)=UPPER(?) AND active=1').bind(store.id, String(b.coupon_code)).first<any>()
+    if (cp) {
+      couponCode = cp.code
+      discount = cp.discount_type === 'percent' ? Math.round(subtotal * Number(cp.discount_value) / 100) : Number(cp.discount_value)
+      if (discount > subtotal) discount = subtotal
+      if (discount < 0) discount = 0
+    }
+  }
+  const total = subtotal - discount
   // Compose a readable address from configurable parts if provided.
   const address = b.address || [b.addr_line, b.landmark, b.pincode].filter(Boolean).join(', ')
+  const note = (b.note || '') + (couponCode ? ` [Coupon ${couponCode} -${discount}]` : '')
   const code = 'ORD-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 5).toUpperCase()
   const r = await c.env.DB.prepare(`INSERT INTO orders (store_id,customer_id,customer_name,customer_phone,customer_email,address,items_json,total,note,order_code,payment_utr)
     VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(store.id, Number(b.customer_id) || 0, b.customer_name, b.customer_phone || '', b.customer_email || '', address, JSON.stringify(b.items), total, b.note || '', code, b.payment_utr || '').run()
-  return json(c, { ok: true, orderId: r.meta.last_row_id, total, order_code: code })
+    .bind(store.id, Number(b.customer_id) || 0, b.customer_name, b.customer_phone || '', b.customer_email || '', address, JSON.stringify(b.items), total, note, code, b.payment_utr || '').run()
+  return json(c, { ok: true, orderId: r.meta.last_row_id, total, subtotal, discount, coupon: couponCode, order_code: code })
 })
 
 // Customer submits UTR / payment reference for a placed order (UPI/bank manual pay)
