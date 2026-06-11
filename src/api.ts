@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from './types'
 import { PLANS, THEMES, CATEGORIES } from './types'
-import { buildPayuRequest, verifyPayuResponse } from './payu'
+import { buildPayuRequest, verifyPayuResponse, payuVerifyPayment } from './payu'
 import { startPayment, verifyRazorpay } from './gateways'
 import { groqChat, buildStoreSystemPrompt } from './ai'
 
@@ -876,11 +876,16 @@ api.post('/pay/subscribe', async (c) => {
 })
 
 api.post('/pay/callback', async (c) => {
-  const { salt } = await getPayuCreds(c)
+  const { key, salt } = await getPayuCreds(c)
   const form = await c.req.parseBody()
   const params: Record<string, string> = {}
   for (const k in form) params[k] = String(form[k])
-  const valid = salt ? await verifyPayuResponse(salt, params) : false
+  // 1) Try hash verification (fast, offline). 2) If that fails but PayU reports
+  // success, confirm authoritatively via PayU's server-to-server verify API.
+  let valid = salt ? await verifyPayuResponse(salt, params) : false
+  if (!valid && params.status === 'success' && key && salt && params.txnid) {
+    valid = await payuVerifyPayment(key, salt, params.txnid)
+  }
   const status = params.status === 'success' && valid ? 'success' : 'failed'
   if (params.txnid) {
     await c.env.DB.prepare('UPDATE subscriptions SET status=? WHERE txn_id=?').bind(status, params.txnid).run()
