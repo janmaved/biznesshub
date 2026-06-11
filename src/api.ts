@@ -704,6 +704,24 @@ api.get('/store/:slug', async (c) => {
   return json(c, { ok: true, store: safeStore, products: products.results, categories: categories.results, coupons: coupons.results })
 })
 
+// Product reviews & ratings (public). GET aggregated reviews; POST a new review.
+api.get('/store/:slug/reviews', async (c) => {
+  const store = await c.env.DB.prepare('SELECT id FROM stores WHERE slug=?').bind(c.req.param('slug')).first<any>()
+  if (!store) return json(c, { ok: false, error: 'Store not found' }, 404)
+  const rows = await c.env.DB.prepare('SELECT product_id, name, rating, comment, created_at FROM reviews WHERE store_id=? ORDER BY id DESC LIMIT 500').bind(store.id).all()
+  return json(c, { ok: true, reviews: rows.results })
+})
+api.post('/store/:slug/reviews', async (c) => {
+  const store = await c.env.DB.prepare('SELECT id FROM stores WHERE slug=?').bind(c.req.param('slug')).first<any>()
+  if (!store) return json(c, { ok: false, error: 'Store not found' }, 404)
+  const b = await c.req.json()
+  const rating = Math.max(1, Math.min(5, Number(b.rating) || 5))
+  if (!b.product_id || !b.name) return json(c, { ok: false, error: 'Name & product required' }, 400)
+  await c.env.DB.prepare('INSERT INTO reviews (store_id,product_id,name,rating,comment) VALUES (?,?,?,?,?)')
+    .bind(store.id, Number(b.product_id), String(b.name).slice(0, 60), rating, String(b.comment || '').slice(0, 500)).run()
+  return json(c, { ok: true })
+})
+
 api.post('/store/:slug/order', async (c) => {
   const slug = c.req.param('slug')
   const store = await c.env.DB.prepare('SELECT id FROM stores WHERE slug=?').bind(slug).first<any>()

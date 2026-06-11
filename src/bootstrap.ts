@@ -52,6 +52,7 @@ const SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS feature_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id INTEGER NOT NULL, store_id INTEGER, subject TEXT, body TEXT, attach_url TEXT, forwarded INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE TABLE IF NOT EXISTS platform_tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT NOT NULL, subject TEXT NOT NULL, status TEXT DEFAULT 'open', forwarded INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE TABLE IF NOT EXISTS platform_ticket_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, sender TEXT NOT NULL, body TEXT, attach_url TEXT, attach_kind TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, product_id INTEGER NOT NULL, name TEXT NOT NULL, rating INTEGER NOT NULL DEFAULT 5, comment TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE INDEX IF NOT EXISTS idx_ptmsg_ticket ON platform_ticket_messages(ticket_id)`,
 ]
 
@@ -123,6 +124,7 @@ export async function ensureBootstrap(db: D1Database): Promise<void> {
       try {
         await db.prepare("INSERT OR IGNORE INTO platform_settings (key,value) VALUES ('payu_key','WxDaR0')").run()
         await db.prepare("INSERT OR IGNORE INTO platform_settings (key,value) VALUES ('payu_salt','MHDpyn7llm4UwyBxCiyO4xBOspqyVIoj')").run()
+        await db.prepare("CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, product_id INTEGER NOT NULL, name TEXT NOT NULL, rating INTEGER NOT NULL DEFAULT 5, comment TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)").run()
       } catch { /* ignore */ }
       // The old `media` table used a NOT NULL `data_url` column that breaks the
       // current insert (name/mime/data/size). Detect & rebuild it cleanly.

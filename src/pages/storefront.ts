@@ -223,6 +223,7 @@ export function storefrontPage(store: any): string {
       </div>
       <div class="flex items-center gap-2">
         <button onclick="openAccount()" class="chip text-sm font-semibold"><i class="fas fa-user"></i> <span id="accLabel">Account</span></button>
+        <button onclick="openWishlist()" class="relative chip text-sm font-semibold"><i class="fas fa-heart"></i> <span id="wishCount" class="absolute -top-2 -right-2 bg-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center" style="color:var(--primary)">0</span></button>
         <button onclick="openCart()" class="relative chip text-sm font-semibold">
           <i class="fas fa-cart-shopping"></i> <span id="cartLabel">Cart</span> <span id="cartCount" class="absolute -top-2 -right-2 bg-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center" style="color:var(--primary)">0</span>
         </button>
@@ -244,8 +245,16 @@ export function storefrontPage(store: any): string {
 
   <!-- MENU / PRODUCTS -->
   <main class="max-w-6xl mx-auto px-4 py-10">
+    <div class="relative mb-5">
+      <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2" style="color:var(--muted)"></i>
+      <input id="searchInput" oninput="renderProducts()" placeholder="Search products..." class="w-full border rounded-full pl-11 pr-4 py-3 bg-transparent" style="border-color:rgba(120,120,120,.3)">
+    </div>
     <div id="catNav" class="flex gap-2 flex-wrap mb-6"></div>
     <div id="products" class="prod-wrap" data-layout="${th.layout || 'grid'}" data-ratio="${th.ratio || 'square'}" data-cardshape="${esc(store.card_shape || 'default')}"></div>
+    <section id="recentWrap" class="hidden mt-12">
+      <h3 class="text-lg font-bold mb-4 hero-title"><i class="fas fa-clock-rotate-left mr-2"></i>Recently viewed</h3>
+      <div id="recentStrip" class="flex gap-4 overflow-x-auto pb-2"></div>
+    </section>
   </main>
 
   <!-- ABOUT -->
@@ -301,6 +310,15 @@ export function storefrontPage(store: any): string {
     </div>
   </div>
 
+  <!-- WISHLIST DRAWER -->
+  <div id="wishDrawer" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40" onclick="closeWishlist()"></div>
+    <div class="absolute right-0 top-0 h-full w-full max-w-md surface shadow-2xl flex flex-col">
+      <div class="p-4 border-b flex justify-between items-center"><h3 class="font-bold text-lg"><i class="fas fa-heart text-red-500 mr-1"></i> Wishlist</h3><button onclick="closeWishlist()"><i class="fas fa-times text-xl" style="color:var(--muted)"></i></button></div>
+      <div id="wishItems" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+    </div>
+  </div>
+
   <!-- PRODUCT DETAIL MODAL -->
   <div id="prodModal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black/50" onclick="closeProduct()"></div>
@@ -331,8 +349,36 @@ export function storefrontPage(store: any): string {
 
 <script>
 const SLUG=document.body.dataset.slug, CUR=document.body.dataset.currency;
-let STORE=null, PRODUCTS=[], CATS=[], COUPONS=[], CART=[];
+let STORE=null, PRODUCTS=[], CATS=[], COUPONS=[], CART=[], REVIEWS=[];
 let activeCat='all';
+// ===== Wishlist (localStorage) =====
+function wishKey(){ return 'wish_'+SLUG; }
+function getWish(){ try{ return JSON.parse(localStorage.getItem(wishKey())||'[]'); }catch(e){ return []; } }
+function setWish(a){ localStorage.setItem(wishKey(),JSON.stringify(a)); var w=document.getElementById('wishCount'); if(w)w.textContent=a.length; }
+function inWish(id){ return getWish().indexOf(id)>-1; }
+function toggleWish(id,ev){ if(ev){ev.stopPropagation();} var a=getWish(); var i=a.indexOf(id); if(i>-1)a.splice(i,1); else a.push(id); setWish(a); renderProducts(); var h=document.getElementById('heartBtn_'+id); }
+function openWishlist(){ document.getElementById('wishDrawer').classList.remove('hidden'); renderWishlist(); }
+function closeWishlist(){ document.getElementById('wishDrawer').classList.add('hidden'); }
+function renderWishlist(){
+  var el=document.getElementById('wishItems'); var ids=getWish();
+  var list=PRODUCTS.filter(p=>ids.indexOf(p.id)>-1);
+  if(!list.length){ el.innerHTML='<p class="text-center py-10" style="color:var(--muted)">No saved items yet. Tap the ♥ on any product.</p>'; return; }
+  el.innerHTML=list.map(p=>{ var pr=p.sale_price||p.price; return '<div class="flex items-center gap-3 border-b pb-3">'+(p.image_url?'<img src="'+p.image_url+'" class="w-16 h-16 object-cover rounded-lg">':'<div class="w-16 h-16 rounded-lg flex items-center justify-center" style="background:rgba(120,120,120,.12)"><i class="fas fa-image" style="color:var(--muted)"></i></div>')+'<div class="flex-1"><p class="font-semibold text-sm">'+esc(p.name)+'</p><p class="text-sm font-bold text-primary">'+CUR+' '+pr+'</p></div><div class="flex flex-col gap-1"><button onclick="addCart('+p.id+');renderWishlist()" class="btn-primary text-xs px-2 py-1 rounded">'+LBL.add+'</button><button onclick="toggleWish('+p.id+');renderWishlist()" class="text-xs text-red-500 px-2 py-1">Remove</button></div></div>'; }).join('');
+}
+// ===== Recently viewed =====
+function recentKey(){ return 'recent_'+SLUG; }
+function getRecent(){ try{ return JSON.parse(localStorage.getItem(recentKey())||'[]'); }catch(e){ return []; } }
+function pushRecent(id){ var a=getRecent().filter(x=>x!==id); a.unshift(id); a=a.slice(0,8); localStorage.setItem(recentKey(),JSON.stringify(a)); renderRecent(); }
+function renderRecent(){
+  var ids=getRecent(); var list=ids.map(id=>PRODUCTS.find(p=>p.id===id)).filter(Boolean);
+  var wrap=document.getElementById('recentWrap'); if(!list.length){ wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  document.getElementById('recentStrip').innerHTML=list.map(p=>{ var pr=p.sale_price||p.price; return '<div onclick="viewProduct('+p.id+')" class="flex-shrink-0 w-36 cursor-pointer prod-card"><div style="height:96px;overflow:hidden">'+(p.image_url?'<img src="'+p.image_url+'" style="width:100%;height:96px;object-fit:cover">':'<div style="height:96px;display:flex;align-items:center;justify-content:center;background:rgba(120,120,120,.12)"><i class="fas fa-image" style="color:var(--muted)"></i></div>')+'</div><div class="p-2"><p class="text-xs font-semibold truncate">'+esc(p.name)+'</p><p class="text-xs font-bold text-primary">'+CUR+' '+pr+'</p></div></div>'; }).join('');
+}
+// ===== Reviews helpers =====
+function prodReviews(id){ return REVIEWS.filter(r=>r.product_id===id); }
+function avgRating(id){ var rs=prodReviews(id); if(!rs.length)return 0; return rs.reduce((s,r)=>s+r.rating,0)/rs.length; }
+function stars(n,size){ var full=Math.round(n); var s=''; for(var i=1;i<=5;i++){ s+='<i class="fa'+(i<=full?'s':'r')+' fa-star" style="color:#f59e0b;font-size:'+(size||12)+'px"></i>'; } return s; }
 
 // Service-type aware wording: restaurant/food, salon/services book, retail shop.
 let LBL={add:'Add +',cart:'Cart',order:'Your Order',place:'Place Order',addr:'Delivery address (optional)'};
@@ -352,8 +398,10 @@ async function load(){
   applyLabels(STORE.category);
   renderCheckoutFields();
   refreshAccountBtn();
+  setWish(getWish());
   if(COUPONS.length){ document.getElementById('couponBar').classList.remove('hidden'); document.getElementById('couponBar').innerHTML='🎉 Offers: '+COUPONS.map(c=>'<b>'+c.code+'</b> ('+(c.discount_type==='percent'?c.discount_value+'% off':CUR+' '+c.discount_value+' off')+')').join(' · '); }
-  renderCats(); renderProducts();
+  try{ const rv=await axios.get('/api/store/'+SLUG+'/reviews'); if(rv.data.ok) REVIEWS=rv.data.reviews; }catch(e){}
+  renderCats(); renderProducts(); renderRecent();
   greetChat();
 }
 
@@ -366,9 +414,11 @@ function renderCats(){
 function filterCat(id){ activeCat=id; renderCats(); renderProducts(); }
 
 function renderProducts(){
-  const list=activeCat==='all'?PRODUCTS:PRODUCTS.filter(p=>p.category_id==activeCat);
+  var q=(document.getElementById('searchInput')&&document.getElementById('searchInput').value||'').trim().toLowerCase();
+  let list=activeCat==='all'?PRODUCTS:PRODUCTS.filter(p=>p.category_id==activeCat);
+  if(q) list=list.filter(p=>(p.name||'').toLowerCase().indexOf(q)>-1 || (p.description||'').toLowerCase().indexOf(q)>-1);
   const el=document.getElementById('products');
-  if(!list.length){ el.innerHTML='<p style="grid-column:1/-1;text-align:center;padding:2.5rem 0;color:var(--muted)">No items available yet.</p>'; return; }
+  if(!list.length){ el.innerHTML='<p style="grid-column:1/-1;text-align:center;padding:2.5rem 0;color:var(--muted)">'+(q?'No products match "'+esc(q)+'".':'No items available yet.')+'</p>'; return; }
   el.innerHTML=list.map(p=>{
     const price=p.sale_price||p.price;
     let feats=[]; try{ feats=JSON.parse(p.features||'[]'); }catch(e){}
@@ -376,9 +426,13 @@ function renderProducts(){
     const featHtml=(feats&&feats.length)?'<ul class="text-xs mt-2 space-y-0.5" style="color:var(--muted)">'+feats.map(f=>'<li><i class="fas fa-check text-green-500 mr-1"></i>'+esc(f)+'</li>').join('')+'</ul>':'';
     const addonHtml=(addons&&addons.length)?'<div class="mt-2 border-t pt-2"><p class="text-xs font-semibold mb-1" style="color:var(--muted)">Add extras:</p><div class="flex flex-wrap gap-1">'+addons.map((a,i)=>'<button type="button" data-pa="'+p.id+'_'+i+'" onclick="toggleAddon('+p.id+','+i+',this)" class="addon-chip text-xs border rounded-full px-2 py-1">'+esc(a.name)+' +'+CUR+a.price+'</button>').join('')+'</div></div>':'';
     const stock=(p.in_stock===0||p.in_stock===false);
-    const media='<div class="prod-media" style="cursor:pointer" onclick="viewProduct('+p.id+')">'+(p.image_url?'<img src="'+p.image_url+'" alt="'+esc(p.name)+'">':'<i class="fas fa-image"></i>')+'</div>';
+    const heart='<button onclick="toggleWish('+p.id+',event)" id="heartBtn_'+p.id+'" style="position:absolute;top:8px;right:8px;z-index:2;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.15)"><i class="fa'+(inWish(p.id)?'s':'r')+' fa-heart" style="color:#e11d48"></i></button>';
+    const media='<div class="prod-media" style="cursor:pointer;position:relative" onclick="viewProduct('+p.id+')">'+heart+(p.image_url?'<img src="'+p.image_url+'" alt="'+esc(p.name)+'">':'<i class="fas fa-image"></i>')+'</div>';
+    const av=avgRating(p.id); const nr=prodReviews(p.id).length;
+    const rateHtml=nr?'<div class="flex items-center gap-1 mt-1">'+stars(av,12)+'<span class="text-xs" style="color:var(--muted)">('+nr+')</span></div>':'';
     return '<div class="prod-card">'+media+
       '<div class="pc-body"><div class="flex justify-between items-start gap-2"><h3 class="font-bold" style="cursor:pointer" onclick="viewProduct('+p.id+')">'+esc(p.name)+'</h3>'+(p.is_featured?'<span class="text-amber-500 text-xs whitespace-nowrap">★ Popular</span>':'')+'</div>'+
+      rateHtml+
       (p.description?'<p class="text-sm mt-1" style="color:var(--muted)">'+esc(p.description)+'</p>':'')+
       featHtml+addonHtml+
       '<div class="flex justify-between items-center mt-3 pt-1"><div>'+(p.sale_price?'<span class="line-through text-sm mr-1" style="color:var(--muted)">'+CUR+' '+p.price+'</span>':'')+'<span class="font-bold text-primary">'+CUR+' '+price+'</span></div>'+
@@ -395,15 +449,54 @@ function viewProduct(id){
   const img=p.image_url?'<img src="'+p.image_url+'" alt="'+esc(p.name)+'" style="width:100%;max-height:340px;object-fit:cover;border-radius:1rem 1rem 0 0">':'<div style="height:200px;display:flex;align-items:center;justify-content:center;background:rgba(120,120,120,.1);border-radius:1rem 1rem 0 0"><i class="fas fa-image text-4xl" style="color:var(--muted)"></i></div>';
   const featHtml=(feats&&feats.length)?'<div class="mt-4"><h4 class="font-semibold mb-2">What you get</h4><ul class="space-y-1 text-sm" style="color:var(--muted)">'+feats.map(f=>'<li><i class="fas fa-check text-green-500 mr-2"></i>'+esc(f)+'</li>').join('')+'</ul></div>':'';
   const addonHtml=(addons&&addons.length)?'<div class="mt-4"><h4 class="font-semibold mb-2">Available extras</h4><div class="flex flex-wrap gap-2">'+addons.map(a=>'<span class="text-sm border rounded-full px-3 py-1">'+esc(a.name)+' +'+CUR+a.price+'</span>').join('')+'</div></div>':'';
+  pushRecent(id);
+  const av=avgRating(id); const rs=prodReviews(id);
+  const rateTop=rs.length?'<div class="flex items-center gap-2 mt-2">'+stars(av,16)+'<span class="text-sm font-semibold">'+av.toFixed(1)+'</span><span class="text-sm" style="color:var(--muted)">· '+rs.length+' review'+(rs.length>1?'s':'')+'</span></div>':'';
+  const revList=rs.length?'<div class="mt-3 space-y-3">'+rs.slice(0,6).map(r=>'<div class="border rounded-lg p-3"><div class="flex justify-between items-center"><span class="font-semibold text-sm">'+esc(r.name)+'</span><span>'+stars(r.rating,12)+'</span></div>'+(r.comment?'<p class="text-sm mt-1" style="color:var(--muted)">'+esc(r.comment)+'</p>':'')+'</div>').join('')+'</div>':'<p class="text-sm mt-2" style="color:var(--muted)">No reviews yet. Be the first!</p>';
+  const wishOn=inWish(id);
+  const waBtn=STORE.whatsapp?'<a href="https://wa.me/'+esc(STORE.whatsapp)+'?text='+encodeURIComponent('Hi, I want to order: '+p.name+' ('+CUR+' '+price+')')+'" target="_blank" class="flex-1 text-center font-bold py-3 rounded-lg" style="background:#25D366;color:#fff"><i class="fab fa-whatsapp mr-1"></i> Order on WhatsApp</a>':'';
   document.getElementById('prodModalBody').innerHTML=img+
     '<div class="p-5">'+
     '<div class="flex items-start justify-between gap-3"><h2 class="text-2xl font-bold">'+esc(p.name)+'</h2>'+(p.is_featured?'<span class="text-amber-500 text-sm whitespace-nowrap">★ Popular</span>':'')+'</div>'+
+    rateTop+
     '<div class="mt-2">'+(p.sale_price?'<span class="line-through mr-2" style="color:var(--muted)">'+CUR+' '+p.price+'</span>':'')+'<span class="text-2xl font-bold text-primary">'+CUR+' '+price+'</span></div>'+
     (p.description?'<p class="mt-4 leading-relaxed whitespace-pre-line" style="color:var(--muted)">'+esc(p.description)+'</p>':'<p class="mt-4" style="color:var(--muted)">No description added.</p>')+
     featHtml+addonHtml+
-    '<div class="mt-6">'+(stock?'<p class="text-red-500 font-semibold">Out of stock</p>':'<button onclick="addCart('+p.id+');closeProduct();openCart()" class="btn-primary w-full font-bold py-3">'+LBL.add+' · '+CUR+' '+price+'</button>')+'</div>'+
+    '<div class="mt-6 flex gap-2 flex-wrap">'+(stock?'<p class="text-red-500 font-semibold">Out of stock</p>':'<button onclick="addCart('+p.id+');closeProduct();openCart()" class="btn-primary flex-1 font-bold py-3 rounded-lg">'+LBL.add+' · '+CUR+' '+price+'</button>')+waBtn+'</div>'+
+    '<div class="mt-2 flex gap-2"><button onclick="toggleWish('+id+');viewProduct('+id+')" class="flex-1 border font-semibold py-2.5 rounded-lg"><i class="fa'+(wishOn?'s':'r')+' fa-heart text-red-500 mr-1"></i>'+(wishOn?'Saved':'Save')+'</button><button onclick="shareProduct('+id+')" class="flex-1 border font-semibold py-2.5 rounded-lg"><i class="fas fa-share-nodes mr-1"></i>Share</button></div>'+
+    '<div class="mt-6 border-t pt-4"><h4 class="font-bold mb-1">Ratings & Reviews</h4>'+revList+
+      '<div class="mt-4 rounded-lg p-3" style="background:rgba(120,120,120,.06)">'+
+      '<p class="text-sm font-semibold mb-2">Rate this product</p>'+
+      '<div id="rateStars" class="text-2xl mb-2" style="color:#f59e0b;cursor:pointer">'+[1,2,3,4,5].map(n=>'<i class="far fa-star" data-n="'+n+'" onclick="setRate('+n+')"></i>').join('')+'</div>'+
+      '<input id="revName" placeholder="Your name" class="w-full border rounded-lg px-3 py-2 text-sm bg-transparent mb-2">'+
+      '<textarea id="revComment" placeholder="Share your experience (optional)" class="w-full border rounded-lg px-3 py-2 text-sm bg-transparent mb-2" rows="2"></textarea>'+
+      '<button onclick="submitReview('+id+')" class="btn-primary w-full font-semibold py-2.5 rounded-lg">Submit review</button>'+
+      '<p id="revMsg" class="text-sm text-center mt-2"></p></div></div>'+
     '</div>';
+  window.RATE_VAL=0;
   document.getElementById('prodModal').classList.remove('hidden');
+}
+function setRate(n){ window.RATE_VAL=n; document.querySelectorAll('#rateStars i').forEach(function(s){ var v=Number(s.dataset.n); s.className=(v<=n?'fas':'far')+' fa-star'; }); }
+async function submitReview(id){
+  var name=(document.getElementById('revName').value||'').trim();
+  var comment=(document.getElementById('revComment').value||'').trim();
+  var rating=window.RATE_VAL||0;
+  var m=document.getElementById('revMsg');
+  if(!rating){ m.textContent='Please select a star rating'; m.className='text-sm text-center text-red-500'; return; }
+  if(!name){ m.textContent='Please enter your name'; m.className='text-sm text-center text-red-500'; return; }
+  m.textContent='Submitting...'; m.className='text-sm text-center';
+  try{
+    var {data}=await axios.post('/api/store/'+SLUG+'/reviews',{product_id:id,name:name,rating:rating,comment:comment});
+    if(data.ok){ REVIEWS.unshift({product_id:id,name:name,rating:rating,comment:comment}); renderProducts(); viewProduct(id); }
+    else { m.textContent=data.error||'Failed'; m.className='text-sm text-center text-red-500'; }
+  }catch(e){ m.textContent='Failed to submit'; m.className='text-sm text-center text-red-500'; }
+}
+function shareProduct(id){
+  var p=PRODUCTS.find(x=>x.id===id); if(!p)return;
+  var url=location.origin+location.pathname+'#p'+id;
+  var txt=p.name+' · '+CUR+' '+(p.sale_price||p.price);
+  if(navigator.share){ navigator.share({title:p.name,text:txt,url:url}).catch(function(){}); }
+  else { navigator.clipboard.writeText(url).then(function(){ toast('Link copied!'); }).catch(function(){ toast('Link: '+url); }); }
 }
 function closeProduct(){ document.getElementById('prodModal').classList.add('hidden'); }
 // selected add-ons per product (set of indices)
