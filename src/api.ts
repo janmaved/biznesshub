@@ -466,8 +466,9 @@ api.post('/owner/coupons', async (c) => {
   const owner = await authOwner(c); if (!owner) return json(c, { ok: false }, 401)
   const store = await getOwnerStore(c.env.DB, owner.id)
   const b = await c.req.json()
+  const active = (b.active === 0 || b.active === false) ? 0 : 1
   const r = await c.env.DB.prepare('INSERT INTO coupons (store_id,code,description,discount_type,discount_value,active) VALUES (?,?,?,?,?,?)')
-    .bind(store.id, b.code, b.description || '', b.discount_type || 'percent', b.discount_value || 0, b.active ? 1 : 0).run()
+    .bind(store.id, String(b.code || '').toUpperCase().trim(), b.description || '', b.discount_type || 'percent', b.discount_value || 0, active).run()
   return json(c, { ok: true, id: r.meta.last_row_id })
 })
 api.delete('/owner/coupons/:id', async (c) => {

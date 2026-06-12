@@ -25,13 +25,13 @@ export interface ThemeStyle {
 }
 
 const FONTS = {
-  poppins: { font: "'Poppins', sans-serif", url: 'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap' },
-  playfair: { font: "'Playfair Display', serif", url: 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Inter:wght@400;600&display=swap' },
-  inter: { font: "'Inter', sans-serif", url: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap' },
-  montserrat: { font: "'Montserrat', sans-serif", url: 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap' },
-  dmserif: { font: "'DM Serif Display', serif", url: 'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;600&display=swap' },
-  quicksand: { font: "'Quicksand', sans-serif", url: 'https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap' },
-  spacegrotesk: { font: "'Space Grotesk', sans-serif", url: 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap' },
+  poppins: { font: "'Poppins', sans-serif", fontUrl: 'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap' },
+  playfair: { font: "'Playfair Display', serif", fontUrl: 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Inter:wght@400;600&display=swap' },
+  inter: { font: "'Inter', sans-serif", fontUrl: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap' },
+  montserrat: { font: "'Montserrat', sans-serif", fontUrl: 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap' },
+  dmserif: { font: "'DM Serif Display', serif", fontUrl: 'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;600&display=swap' },
+  quicksand: { font: "'Quicksand', sans-serif", fontUrl: 'https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap' },
+  spacegrotesk: { font: "'Space Grotesk', sans-serif", fontUrl: 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap' },
 };
 
 export const THEME_STYLES: Record<string, ThemeStyle> = {
